@@ -38,6 +38,7 @@ All notable changes are documented here. The format follows Keep a Changelog and
 - Resolved ShellCheck export warnings and excluded generated diagnostic reports from source archives.
 - Made external command decoding resilient to non-UTF-8 bytes on Windows.
 - Applied configured directory exclusions consistently to Git-history secret scans.
+- Made source ZIP file permissions derive from canonical Git modes on every host platform.
 
 ## [0.6.0] - 2026-07-21
 
