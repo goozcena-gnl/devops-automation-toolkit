@@ -1,0 +1,30 @@
+{
+  "repository": "example/insecure",
+  "metadata": {
+    "default_branch": "main",
+    "visibility": "public",
+    "archived": false,
+    "security_and_analysis": {
+      "secret_scanning": {"status": "disabled"},
+      "secret_scanning_push_protection": {"status": "disabled"},
+      "dependabot_security_updates": {"status": "disabled"}
+    }
+  },
+  "branch_protection": {
+    "required_pull_request_reviews": null,
+    "required_status_checks": null,
+    "allow_force_pushes": {"enabled": true},
+    "allow_deletions": {"enabled": true},
+    "required_conversation_resolution": {"enabled": false}
+  },
+  "rulesets": [],
+  "actions_permissions": {
+    "default_workflow_permissions": "write",
+    "can_approve_pull_request_reviews": true
+  },
+  "contents": {
+    "security_policy": false,
+    "codeowners": false,
+    "dependabot": false
+  }
+}

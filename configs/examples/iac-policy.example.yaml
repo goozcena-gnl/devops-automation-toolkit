@@ -1,0 +1,6 @@
+version: 1
+threshold: high
+exceptions:
+  - fingerprint: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    justification: Time-bounded public ingress exception approved for a disposable lab
+    expires_at: '2026-10-31T23:59:59Z'

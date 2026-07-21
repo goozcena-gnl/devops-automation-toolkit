@@ -1,0 +1,182 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "budget-guard",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T19:26:05.322151Z",
+    "completed_at": "2026-07-21T19:26:05.322948Z",
+    "target": "aws:111122223333",
+    "partial": false,
+    "capabilities": [
+      "read-only",
+      "offline-snapshot",
+      "provider:aws",
+      "actual-versus-budget",
+      "notification-policy",
+      "trend-analysis"
+    ]
+  },
+  "findings": [
+    {
+      "id": "CLOUD-BUDGET-NOTIFICATION-DISABLED",
+      "tool": "budget-guard",
+      "category": "cloud-budget",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Budget notification is disabled: monthly-cloud-budget",
+      "description": "Budget coverage, alerting, actual spend, forecast, or cost trend is outside the configured FinOps policy.",
+      "recommendation": "Enable the notification or remove it if it is intentionally obsolete, then validate the remaining escalation path.",
+      "fingerprint": "sha256:a65ae666a7f3b308ff4cfef77a492ccbc8cc77f74fb4b042da8ceb78f6de10dc",
+      "resource": {
+        "type": "CloudBudget",
+        "name": "monthly-cloud-budget",
+        "provider": "aws",
+        "identifier": "monthly-cloud-budget"
+      },
+      "evidence": {
+        "summary": "threshold=80.0; enabled=false"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-BUDGET-MISSING-THRESHOLDS",
+      "tool": "budget-guard",
+      "category": "cloud-budget",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Budget lacks required alert thresholds: monthly-cloud-budget",
+      "description": "Budget coverage, alerting, actual spend, forecast, or cost trend is outside the configured FinOps policy.",
+      "recommendation": "Add progressive actual and forecast notifications so teams can respond before the budget is exhausted.",
+      "fingerprint": "sha256:a1543f42d793d2e335edd48b3d6fb5c061e6b06e45f148c22590cacb40535fb3",
+      "resource": {
+        "type": "CloudBudget",
+        "name": "monthly-cloud-budget",
+        "provider": "aws",
+        "identifier": "monthly-cloud-budget"
+      },
+      "evidence": {
+        "summary": "required=50,80,100; active=50; missing=80,100"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-BUDGET-EXCEEDED",
+      "tool": "budget-guard",
+      "category": "cloud-budget",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Budget is exceeded: monthly-cloud-budget",
+      "description": "Budget coverage, alerting, actual spend, forecast, or cost trend is outside the configured FinOps policy.",
+      "recommendation": "Investigate the largest cost drivers immediately, freeze nonessential expansion, and document the approved remediation or budget change.",
+      "fingerprint": "sha256:ecfeb83e3674d9b0d7b8eb2943d128adba8b9806b0e5078dba23b22f80a0647a",
+      "resource": {
+        "type": "CloudBudget",
+        "name": "monthly-cloud-budget",
+        "provider": "aws",
+        "identifier": "monthly-cloud-budget"
+      },
+      "evidence": {
+        "summary": "actual=110.00; limit=100.00; utilization_percent=110.0"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-BUDGET-FORECAST-OVERSPEND",
+      "tool": "budget-guard",
+      "category": "cloud-budget",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Forecast exceeds budget: monthly-cloud-budget",
+      "description": "Budget coverage, alerting, actual spend, forecast, or cost trend is outside the configured FinOps policy.",
+      "recommendation": "Review the forecast inputs and largest services, then implement approved optimization or update the budget with accountable ownership.",
+      "fingerprint": "sha256:f691eee2d8177e8bdd43524aece29b0ce20ba2cb708dadeec438f69f32dfd6d7",
+      "resource": {
+        "type": "CloudBudget",
+        "name": "monthly-cloud-budget",
+        "provider": "aws",
+        "identifier": "monthly-cloud-budget"
+      },
+      "evidence": {
+        "summary": "forecast=150.00; limit=100.00; forecast_percent=150.0"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-COST-RAPID-INCREASE",
+      "tool": "budget-guard",
+      "category": "cloud-budget",
+      "severity": "high",
+      "confidence": "medium",
+      "title": "Recent daily cloud spend increased sharply",
+      "description": "Budget coverage, alerting, actual spend, forecast, or cost trend is outside the configured FinOps policy.",
+      "recommendation": "Correlate the increase with deployments, data transfer, scale events, new regions, and anomalous resource creation.",
+      "fingerprint": "sha256:77ef89d62f74c326b9cc10831d5566062d9f7f7f8bab7870caa3ca2fce4fb992",
+      "resource": {
+        "type": "CloudBudget",
+        "name": "cost-trend",
+        "provider": "aws",
+        "identifier": "cost-trend"
+      },
+      "evidence": {
+        "summary": "recent_daily_average=32.33; prior_daily_average=10.14; ratio=3.19; threshold=1.50"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-COST-SERVICE-CONCENTRATION",
+      "tool": "budget-guard",
+      "category": "cloud-budget",
+      "severity": "medium",
+      "confidence": "medium",
+      "title": "Cloud spend is concentrated in one service: Amazon Elastic Compute Cloud",
+      "description": "Budget coverage, alerting, actual spend, forecast, or cost trend is outside the configured FinOps policy.",
+      "recommendation": "Validate whether the concentration matches architecture expectations and prioritize optimization analysis for this service.",
+      "fingerprint": "sha256:fa78c52d6c32299729520cbd035b20770401198f4954e85a718bdfa8fe32c6b5",
+      "resource": {
+        "type": "CloudBudget",
+        "name": "service-concentration",
+        "provider": "aws",
+        "identifier": "service-concentration"
+      },
+      "evidence": {
+        "summary": "service_cost=85.00; total_cost=100.00; share_percent=85.0"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 2,
+    "high": 3,
+    "critical": 1,
+    "suppressed": 0,
+    "total": 6
+  },
+  "extensions": {
+    "provider": "aws",
+    "metrics": {
+      "budgets": 1,
+      "missing_thresholds": 1,
+      "disabled_notifications": 1,
+      "notifications_without_recipients": 0,
+      "overspent_budgets": 1,
+      "forecast_overspends": 1,
+      "cost_anomalies": 1,
+      "service_concentration_findings": 1
+    },
+    "required_thresholds": [
+      50,
+      80,
+      100
+    ],
+    "collection_notes": []
+  }
+}

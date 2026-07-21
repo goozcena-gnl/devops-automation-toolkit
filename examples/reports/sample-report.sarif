@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "devops-toolkit",
+          "version": "1.0.0",
+          "rules": [
+            {
+              "id": "FOUNDATION-EXAMPLE",
+              "name": "foundation_example",
+              "shortDescription": {
+                "text": "Synthetic foundation finding"
+              },
+              "help": {
+                "text": "Replace the synthetic collector during the relevant implementation phase."
+              },
+              "properties": {
+                "category": "foundation"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "FOUNDATION-EXAMPLE",
+          "level": "warning",
+          "message": {
+            "text": "Synthetic foundation finding"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:33b7ee495ca8cb3d313acefc2f6d1efc139d40bddb2952d16d51a10991536af1"
+          },
+          "properties": {
+            "category": "foundation",
+            "confidence": "high",
+            "suppressed": false,
+            "recommendation": "Replace the synthetic collector during the relevant implementation phase."
+          }
+        }
+      ]
+    }
+  ]
+}

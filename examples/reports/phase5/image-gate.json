@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "image-gate",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T16:51:53.203936Z",
+    "completed_at": "2026-07-21T16:51:53.204458Z",
+    "target": "synthetic.local/demo:1.0",
+    "partial": false,
+    "capabilities": [
+      "vulnerability-normalization",
+      "secret-redaction",
+      "misconfiguration-policy",
+      "cyclonedx-sbom",
+      "optional-cosign-verification"
+    ]
+  },
+  "findings": [
+    {
+      "id": "IMAGE-VULNERABILITY",
+      "tool": "image-gate",
+      "category": "container-image",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "CVE-2099-0001 affects demo-lib",
+      "description": "Container image analysis identified a release-policy concern.",
+      "recommendation": "Upgrade demo-lib to 1.1 or later and rebuild the image.",
+      "fingerprint": "sha256:2bfde98316c66dc8d2db3369bced0664d13febfa9974e458505536befd99dad5",
+      "resource": {
+        "type": "ContainerImage",
+        "name": "synthetic.local/demo:1.0:app-layer",
+        "identifier": "synthetic.local/demo:1.0"
+      },
+      "evidence": {
+        "summary": "package=demo-lib; installed=1.0; fixed=1.1",
+        "location": "app-layer"
+      },
+      "references": [
+        "https://example.invalid/CVE-2099-0001"
+      ],
+      "suppressed": false
+    },
+    {
+      "id": "IMAGE-EMBEDDED-SECRET",
+      "tool": "image-gate",
+      "category": "container-secret",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Embedded secret detected: synthetic-api-key",
+      "description": "The scanner reported credential-like material in an image layer or file.",
+      "recommendation": "Revoke the credential, remove it from the build context and history, and rebuild from a clean layer chain.",
+      "fingerprint": "sha256:0b97de667a9d7ebd1e22d55790d424ce02222d9a2713166a594fcfe1abf40d8b",
+      "resource": {
+        "type": "ContainerImage",
+        "name": "synthetic.local/demo:1.0:app-layer",
+        "identifier": "synthetic.local/demo:1.0"
+      },
+      "evidence": {
+        "summary": "rule=synthetic-api-key; category=API Key; value=redacted",
+        "location": "config.txt",
+        "line": 4
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 0,
+    "high": 1,
+    "critical": 1,
+    "suppressed": 0,
+    "total": 2
+  },
+  "extensions": {
+    "metrics": {
+      "vulnerabilities": 1,
+      "fix_available": 1,
+      "secrets": 1,
+      "misconfigurations": 0,
+      "licenses": 0,
+      "unfixed_ignored": 0
+    },
+    "scanner": 2,
+    "artifact_name": "example.invalid/app:1.0",
+    "artifact_type": "container_image",
+    "sbom_output": null
+  }
+}

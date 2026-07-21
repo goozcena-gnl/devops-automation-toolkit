@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.11', '3.12', '3.13']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Ruff format
+        run: ruff format --check .
+      - name: Ruff lint
+        run: ruff check .
+      - name: Mypy
+        run: mypy src
+      - name: Unit and contract tests
+        run: pytest tests/unit tests/contract --cov-report=xml
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: coverage.xml
+          retention-days: 7
+
+  native-syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate Bash syntax
+        run: bash -n scripts/linux/linux-triage.sh
+      - name: ShellCheck
+        run: shellcheck scripts/linux/linux-triage.sh
+
+  workflow-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint
+        # v1.7.12 release tag resolves to 914e7df21a07ef503a81201c76d2b11c789d3fca.
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+  powershell-static:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Parse PowerShell
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/workstation/devops-workstation-audit.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+          $findings = Invoke-ScriptAnalyzer -Path scripts/workstation/devops-workstation-audit.ps1 -Severity Error,Warning
+          if ($findings) {
+            $findings | Format-Table -AutoSize | Out-String | Write-Error
+            exit 1
+          }
+      - name: Execute Workstation Doctor contract smoke test
+        shell: pwsh
+        run: |
+          & ./scripts/workstation/devops-workstation-audit.ps1 `
+            -RequiredTools git,ssh `
+            -OutputPath workstation-report.json
+          $collectorExit = $LASTEXITCODE
+          if ($collectorExit -notin @(0, 5)) {
+            throw "Unexpected Workstation Doctor exit code: $collectorExit"
+          }
+      - name: Validate Workstation Doctor report schema
+        shell: pwsh
+        run: |
+          python -m pip install jsonschema referencing
+          @'
+          import json
+          from pathlib import Path
+          from jsonschema import Draft202012Validator
+          from referencing import Registry, Resource
+          root = Path('.')
+          report_schema = json.loads((root / 'configs/schemas/report.schema.json').read_text())
+          finding_schema = json.loads((root / 'configs/schemas/finding.schema.json').read_text())
+          resource = Resource.from_contents(finding_schema)
+          registry = Registry().with_resource('finding.schema.json', resource).with_resource(finding_schema['$id'], resource)
+          Draft202012Validator(report_schema, registry=registry).validate(json.loads((root / 'workstation-report.json').read_text()))
+          '@ | python -
+      - name: Upload Workstation Doctor smoke report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: workstation-doctor-windows-smoke
+          path: workstation-report.json
+          if-no-files-found: warn
+          retention-days: 3

@@ -1,0 +1,413 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "gha-guard",
+          "version": "1.0.0",
+          "rules": [
+            {
+              "id": "GHA-PERMISSIONS-WRITE-ALL",
+              "name": "gha_permissions_write_all",
+              "shortDescription": {
+                "text": "Workflow grants write-all permissions at workflow scope"
+              },
+              "help": {
+                "text": "Replace write-all with the smallest per-scope permissions required by each job."
+              },
+              "properties": {
+                "category": "github-actions"
+              }
+            },
+            {
+              "id": "GHA-PULL-REQUEST-TARGET",
+              "name": "gha_pull_request_target",
+              "shortDescription": {
+                "text": "Workflow uses pull_request_target"
+              },
+              "help": {
+                "text": "Avoid checking out or executing untrusted pull-request code in this event; split privileged and untrusted processing."
+              },
+              "properties": {
+                "category": "github-actions"
+              }
+            },
+            {
+              "id": "GHA-CONCURRENCY-MISSING",
+              "name": "gha_concurrency_missing",
+              "shortDescription": {
+                "text": "Workflow has no concurrency policy"
+              },
+              "help": {
+                "text": "Add a concurrency group and cancel superseded runs where safe to reduce duplicate deployments and cost."
+              },
+              "properties": {
+                "category": "github-actions"
+              }
+            },
+            {
+              "id": "GHA-TIMEOUT-MISSING",
+              "name": "gha_timeout_missing",
+              "shortDescription": {
+                "text": "Job `audit` has no timeout"
+              },
+              "help": {
+                "text": "Set timeout-minutes to bound hung commands and hosted-runner consumption."
+              },
+              "properties": {
+                "category": "github-actions"
+              }
+            },
+            {
+              "id": "GHA-SELF-HOSTED-RUNNER",
+              "name": "gha_self_hosted_runner",
+              "shortDescription": {
+                "text": "Job `audit` uses a self-hosted runner"
+              },
+              "help": {
+                "text": "Isolate ephemeral runners, restrict repository access, and never run untrusted fork code on persistent runners."
+              },
+              "properties": {
+                "category": "github-actions"
+              }
+            },
+            {
+              "id": "GHA-ACTION-NOT-SHA-PINNED",
+              "name": "gha_action_not_sha_pinned",
+              "shortDescription": {
+                "text": "Action `actions/checkout` is not pinned to a full commit SHA"
+              },
+              "help": {
+                "text": "Replace the mutable tag or branch with a reviewed 40-character commit SHA."
+              },
+              "properties": {
+                "category": "github-actions"
+              }
+            },
+            {
+              "id": "GHA-CHECKOUT-PERSIST-CREDENTIALS",
+              "name": "gha_checkout_persist_credentials",
+              "shortDescription": {
+                "text": "Checkout credentials remain persisted"
+              },
+              "help": {
+                "text": "Set `persist-credentials: false` unless later steps explicitly require the GitHub token in Git configuration."
+              },
+              "properties": {
+                "category": "github-actions"
+              }
+            },
+            {
+              "id": "GHA-ARTIFACT-RETENTION",
+              "name": "gha_artifact_retention",
+              "shortDescription": {
+                "text": "Artifact retention is not explicitly bounded"
+              },
+              "help": {
+                "text": "Set retention-days according to data sensitivity and operational need."
+              },
+              "properties": {
+                "category": "github-actions"
+              }
+            },
+            {
+              "id": "GHA-UNTRUSTED-INPUT-IN-SHELL",
+              "name": "gha_untrusted_input_in_shell",
+              "shortDescription": {
+                "text": "Untrusted event data is interpolated directly into a shell command"
+              },
+              "help": {
+                "text": "Pass the expression through an environment variable and quote it safely, or process it with a non-shell action."
+              },
+              "properties": {
+                "category": "github-actions"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "GHA-PERMISSIONS-WRITE-ALL",
+          "level": "error",
+          "message": {
+            "text": "Workflow grants write-all permissions at workflow scope"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:e04d88285b46d5c3aaef110bc54d48cc6be4f2d40369807200b64b6df3277dc7"
+          },
+          "properties": {
+            "category": "github-actions",
+            "confidence": "high",
+            "suppressed": false,
+            "recommendation": "Replace write-all with the smallest per-scope permissions required by each job."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/insecure.yml"
+                },
+                "region": {
+                  "startLine": 4
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GHA-PULL-REQUEST-TARGET",
+          "level": "error",
+          "message": {
+            "text": "Workflow uses pull_request_target"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:999ab284409c7b6fb8f691a8f0e3c35516daec85d9879fcd1bfcf4db8f18d004"
+          },
+          "properties": {
+            "category": "github-actions",
+            "confidence": "high",
+            "suppressed": false,
+            "recommendation": "Avoid checking out or executing untrusted pull-request code in this event; split privileged and untrusted processing."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/insecure.yml"
+                },
+                "region": {
+                  "startLine": 3
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GHA-CONCURRENCY-MISSING",
+          "level": "note",
+          "message": {
+            "text": "Workflow has no concurrency policy"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:395b2be0ad065dd585d954850873c605488b604de1046c3cc93781665d2e0f69"
+          },
+          "properties": {
+            "category": "github-actions",
+            "confidence": "medium",
+            "suppressed": false,
+            "recommendation": "Add a concurrency group and cancel superseded runs where safe to reduce duplicate deployments and cost."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/insecure.yml"
+                },
+                "region": {}
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GHA-TIMEOUT-MISSING",
+          "level": "warning",
+          "message": {
+            "text": "Job `audit` has no timeout"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:2e2d924b826f29247de738eb49be2cd6adac6401578594e4b4036903e16dfa8c"
+          },
+          "properties": {
+            "category": "github-actions",
+            "confidence": "high",
+            "suppressed": false,
+            "recommendation": "Set timeout-minutes to bound hung commands and hosted-runner consumption."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/insecure.yml"
+                },
+                "region": {
+                  "startLine": 6
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GHA-SELF-HOSTED-RUNNER",
+          "level": "error",
+          "message": {
+            "text": "Job `audit` uses a self-hosted runner"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:a4b6fe7028c85fb8c75dde6612d5b5cd3c6cf2925aa1ce5ade172d106c94fce3"
+          },
+          "properties": {
+            "category": "github-actions",
+            "confidence": "high",
+            "suppressed": false,
+            "recommendation": "Isolate ephemeral runners, restrict repository access, and never run untrusted fork code on persistent runners."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/insecure.yml"
+                },
+                "region": {
+                  "startLine": 7
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GHA-ACTION-NOT-SHA-PINNED",
+          "level": "error",
+          "message": {
+            "text": "Action `actions/checkout` is not pinned to a full commit SHA"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:fdbe4962b9ffaa111c1c1024469b7e0a2d43a2ebd9924188dae1f5976acd8990"
+          },
+          "properties": {
+            "category": "github-actions",
+            "confidence": "high",
+            "suppressed": false,
+            "recommendation": "Replace the mutable tag or branch with a reviewed 40-character commit SHA."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/insecure.yml"
+                },
+                "region": {
+                  "startLine": 9
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GHA-CHECKOUT-PERSIST-CREDENTIALS",
+          "level": "warning",
+          "message": {
+            "text": "Checkout credentials remain persisted"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:de61af0e7ef2fc2dd5cda1ad5dd78b72b8b6ce68574afca1519e6d0ead7f5d79"
+          },
+          "properties": {
+            "category": "github-actions",
+            "confidence": "high",
+            "suppressed": false,
+            "recommendation": "Set `persist-credentials: false` unless later steps explicitly require the GitHub token in Git configuration."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/insecure.yml"
+                },
+                "region": {
+                  "startLine": 9
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GHA-ACTION-NOT-SHA-PINNED",
+          "level": "error",
+          "message": {
+            "text": "Action `actions/upload-artifact` is not pinned to a full commit SHA"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:01a247f878ffd29974a6d72de6546b61227bcbb704b8c24220b636352c718e11"
+          },
+          "properties": {
+            "category": "github-actions",
+            "confidence": "high",
+            "suppressed": false,
+            "recommendation": "Replace the mutable tag or branch with a reviewed 40-character commit SHA."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/insecure.yml"
+                },
+                "region": {
+                  "startLine": 10
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GHA-ARTIFACT-RETENTION",
+          "level": "note",
+          "message": {
+            "text": "Artifact retention is not explicitly bounded"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:f31532db438fdecea2ae5f1b410f40c317960045026838f1d7aca89b3ef09434"
+          },
+          "properties": {
+            "category": "github-actions",
+            "confidence": "medium",
+            "suppressed": false,
+            "recommendation": "Set retention-days according to data sensitivity and operational need."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/insecure.yml"
+                },
+                "region": {
+                  "startLine": 10
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "GHA-UNTRUSTED-INPUT-IN-SHELL",
+          "level": "error",
+          "message": {
+            "text": "Untrusted event data is interpolated directly into a shell command"
+          },
+          "partialFingerprints": {
+            "primaryLocationLineHash": "sha256:47e68668e4657da94b535ae55faa34299bc1c865f1d50579ac055f3d7d66acc4"
+          },
+          "properties": {
+            "category": "github-actions",
+            "confidence": "high",
+            "suppressed": false,
+            "recommendation": "Pass the expression through an environment variable and quote it safely, or process it with a non-shell action."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/insecure.yml"
+                },
+                "region": {
+                  "startLine": 14
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

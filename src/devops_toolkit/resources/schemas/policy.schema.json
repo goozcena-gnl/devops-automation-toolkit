@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/devops-toolkit/policy.schema.json",
+  "title": "DevOps Toolkit Policy",
+  "type": "object",
+  "required": [
+    "version",
+    "threshold"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "threshold": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "fingerprint",
+          "justification",
+          "expires_at"
+        ],
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "justification": {
+            "type": "string",
+            "minLength": 5
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

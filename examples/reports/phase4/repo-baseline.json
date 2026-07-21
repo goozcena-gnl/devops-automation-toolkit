@@ -1,0 +1,325 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "repo-baseline",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T16:00:15.576106Z",
+    "completed_at": "2026-07-21T16:00:15.576903Z",
+    "target": "example/insecure",
+    "partial": false,
+    "capabilities": [
+      "branch-protection",
+      "rulesets",
+      "repository-files",
+      "actions-permissions",
+      "security-features"
+    ]
+  },
+  "findings": [
+    {
+      "id": "GITHUB-REVIEWS-NOT-REQUIRED",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Pull-request reviews are not required",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Require at least one approval and consider code-owner and last-push approval for sensitive repositories.",
+      "fingerprint": "sha256:469cc3f7c1ceb686879c7295b3828d9bee88754f8a3264f1a54bf919a5800e08",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "required_pull_request_reviews absent",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-STATUS-CHECKS-NOT-REQUIRED",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "high",
+      "confidence": "high",
+      "title": "No status checks are required before merge",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Require trusted build, test, security, and policy checks on the default branch.",
+      "fingerprint": "sha256:2f915af1aae6ef9c7d0996286045cd8f60878aea634ad3f413dbb8b93076895e",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "required_status_checks empty",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-FORCE-PUSH-ALLOWED",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Force pushes are allowed",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Disable force pushes on the default branch.",
+      "fingerprint": "sha256:3ca63aed534b961df304f6aff5be9c48f299a9f86115458ef6152646ab5efc98",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "allow_force_pushes=true",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-BRANCH-DELETION-ALLOWED",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Default branch deletion is allowed",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Disable branch deletion for the default branch.",
+      "fingerprint": "sha256:ce9ddf6e9934032708e623479a80b3f7304db8e2f7214bbba2d7c3f710184ba2",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "allow_deletions=true",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-CONVERSATION-RESOLUTION-NOT-REQUIRED",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Review conversations need not be resolved",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Require conversation resolution before merge.",
+      "fingerprint": "sha256:d53344e81ad53b496164e595917da4c3bd07eea263eb75635c502b3c4433810b",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "required_conversation_resolution=false",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-SECURITY-POLICY-MISSING",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "SECURITY.md is missing",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Publish supported versions, reporting instructions, and coordinated disclosure expectations.",
+      "fingerprint": "sha256:c7715956081e87acabec2a1f72eae727f9481764f52f74aabd40bfb312268b90",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "security_policy=false",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-CODEOWNERS-MISSING",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "CODEOWNERS is missing",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Define accountable reviewers for sensitive and operationally critical paths.",
+      "fingerprint": "sha256:8a295bb19c3c8bc14ebe415c1e1090125c87339b9d3faacae7a8cbcb68ddb361",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "codeowners=false",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-DEPENDABOT-CONFIG-MISSING",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Dependabot configuration is missing",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Configure scheduled dependency updates for supported ecosystems and GitHub Actions.",
+      "fingerprint": "sha256:279d3982d02a5d96ec9854d005e0eb46d20098da9db62a91b9d03cbfdcdb92ca",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "dependabot=false",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-ACTIONS-DEFAULT-WRITE",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "high",
+      "confidence": "high",
+      "title": "GitHub Actions receives write permission by default",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Set the default workflow permission to read and grant write access only to specific jobs.",
+      "fingerprint": "sha256:0eaa6a2d25390e30fa1973de3f490c437fe4219424363e98c2522bc77f89e6ec",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "default_workflow_permissions=write",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-ACTIONS-CAN-APPROVE",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "high",
+      "confidence": "high",
+      "title": "GitHub Actions can approve pull requests",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Disable workflow approval of pull requests unless a reviewed automation use case requires it.",
+      "fingerprint": "sha256:50efbc10ff8418ec6a8bdc46890384dc24af816fdc879f6fdeafbee3c6183929",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "can_approve_pull_request_reviews=true",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-SECRET-SCANNING-DISABLED",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Secret scanning is disabled",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Enable secret scanning where the repository plan supports it.",
+      "fingerprint": "sha256:d3f303b6b634bf2f0bfb7223dbd91747f1402fe73b91daee8bcde45799f08301",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "secret_scanning=disabled",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-PUSH-PROTECTION-DISABLED",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Secret scanning push protection is disabled",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Enable push protection to block supported secrets before they enter Git history.",
+      "fingerprint": "sha256:e8e800093ea763116c38703419f7ff560dbb6795f4d6291f30326212aac8acad",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "secret_scanning_push_protection=disabled",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "GITHUB-DEPENDABOT-SECURITY-UPDATES-DISABLED",
+      "tool": "repo-baseline",
+      "category": "github-governance",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Dependabot security updates are disabled",
+      "description": "Repository configuration does not meet the selected security and governance baseline.",
+      "recommendation": "Enable automated security update pull requests where supported.",
+      "fingerprint": "sha256:6c878e3173d1ee873b1f4d587a3c2b8005231d3fa22ec17d2d1c2e9049283740",
+      "resource": {
+        "type": "GitHubRepository",
+        "name": "example/insecure",
+        "provider": "github"
+      },
+      "evidence": {
+        "summary": "dependabot_security_updates=disabled",
+        "location": "example/insecure"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 5,
+    "high": 6,
+    "critical": 2,
+    "suppressed": 0,
+    "total": 13
+  },
+  "extensions": {
+    "metrics": {
+      "default_branch": "main",
+      "visibility": "public",
+      "archived": false
+    },
+    "collection_errors": {},
+    "offline_snapshot": true
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "provider": "azure",
+  "subscription": {"id": "00000000-0000-0000-0000-000000000001", "name": "production-subscription"},
+  "role_assignments": [
+    {
+      "roleDefinitionName": "Owner",
+      "scope": "/subscriptions/00000000-0000-0000-0000-000000000001",
+      "principalName": "legacy-deployer",
+      "principalType": "ServicePrincipal"
+    },
+    {
+      "roleDefinitionName": "Contributor",
+      "scope": "/subscriptions/00000000-0000-0000-0000-000000000001",
+      "principalId": "deleted-principal-id",
+      "principalType": "Unknown"
+    }
+  ],
+  "role_definitions": [
+    {
+      "roleName": "Unrestricted Automation",
+      "roleType": "CustomRole",
+      "permissions": [{"actions": ["*"], "dataActions": []}]
+    }
+  ],
+  "service_principals": [
+    {
+      "displayName": "legacy-deployer",
+      "credentials": [
+        {"type": "password", "endDateTime": "2020-01-01T00:00:00Z"}
+      ]
+    }
+  ]
+}

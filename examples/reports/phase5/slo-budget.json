@@ -1,0 +1,132 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "slo-budget",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T16:52:03.687829Z",
+    "completed_at": "2026-07-21T16:52:03.690398Z",
+    "target": "checkout-availability",
+    "partial": false,
+    "capabilities": [
+      "csv-json-sli-input",
+      "prometheus-query-range",
+      "error-budget-calculation",
+      "multi-window-burn-rate",
+      "no-data-detection"
+    ]
+  },
+  "findings": [
+    {
+      "id": "SLO-OBJECTIVE-MISSED",
+      "tool": "slo-budget",
+      "category": "slo",
+      "severity": "high",
+      "confidence": "high",
+      "title": "SLO objective missed: checkout-availability",
+      "description": "",
+      "recommendation": "Prioritize reliability work, freeze risky changes when policy requires it, and inspect the dominant failure source.",
+      "fingerprint": "sha256:353f4740a93d4fed13c4b9e68d38affafd8ee7ca5fa3f657ef0c6c6ce0f2108c",
+      "resource": {
+        "type": "SLO",
+        "name": "checkout-availability"
+      },
+      "evidence": {
+        "summary": "objective=0.999000; compliance=0.980000; bad=60.000; total=3000.000"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "SLO-ERROR-BUDGET-EXHAUSTED",
+      "tool": "slo-budget",
+      "category": "slo",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Error budget exhausted: checkout-availability",
+      "description": "",
+      "recommendation": "Apply the organization error-budget policy and focus on restoring sustainable reliability.",
+      "fingerprint": "sha256:7aeb9801ee211f061072641a1499f20b3f1408ed8539850af8a4dde091e01b34",
+      "resource": {
+        "type": "SLO",
+        "name": "checkout-availability"
+      },
+      "evidence": {
+        "summary": "budget_consumed=20.000; budget_remaining=-19.000"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "SLO-BURN-RATE-EXCEEDED",
+      "tool": "slo-budget",
+      "category": "slo-burn-rate",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Fast burn-rate threshold exceeded: checkout-availability",
+      "description": "",
+      "recommendation": "Investigate the current failure mode and use the paired burn windows to avoid reacting to isolated noise.",
+      "fingerprint": "sha256:1a99625ce4fd846d12846aeb67535a4ea4050a958f1046c49b62bc4baa9a39de",
+      "resource": {
+        "type": "SLO",
+        "name": "checkout-availability"
+      },
+      "evidence": {
+        "summary": "window_points=2; burn_rate=25.000; threshold=10.000"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "SLO-BURN-RATE-EXCEEDED",
+      "tool": "slo-budget",
+      "category": "slo-burn-rate",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Slow burn-rate threshold exceeded: checkout-availability",
+      "description": "",
+      "recommendation": "Investigate the current failure mode and use the paired burn windows to avoid reacting to isolated noise.",
+      "fingerprint": "sha256:57b84017e4e9853ca368995e0691227209cb2f3ab5bf34c4b6351c9ee9265324",
+      "resource": {
+        "type": "SLO",
+        "name": "checkout-availability"
+      },
+      "evidence": {
+        "summary": "window_points=3; burn_rate=20.000; threshold=5.000"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 0,
+    "high": 2,
+    "critical": 2,
+    "suppressed": 0,
+    "total": 4
+  },
+  "extensions": {
+    "source": "tests/fixtures/slo/samples.csv",
+    "slo": {
+      "name": "checkout-availability",
+      "objective": 0.999,
+      "sample_count": 3,
+      "period_start": "2026-07-21T10:00:00+00:00",
+      "period_end": "2026-07-21T10:10:00+00:00",
+      "total": 3000.0,
+      "good": 2940.0,
+      "bad": 60.0,
+      "compliance": 0.98,
+      "allowed_bad": 3.0000000000000027,
+      "error_budget_consumed": 19.999999999999982,
+      "error_budget_remaining": -18.999999999999982,
+      "overall_burn_rate": 20.0,
+      "burn_windows": {
+        "fast": 25.0,
+        "slow": 20.0
+      }
+    }
+  }
+}

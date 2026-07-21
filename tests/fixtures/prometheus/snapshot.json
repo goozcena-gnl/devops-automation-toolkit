@@ -1,0 +1,47 @@
+{
+  "base_url": "https://prometheus.example.invalid",
+  "targets": {
+    "activeTargets": [
+      {
+        "labels": {"job": "api", "instance": "api-1:9090"},
+        "health": "down",
+        "lastError": "connection refused",
+        "scrapeDuration": 9.0,
+        "scrapeTimeout": 10.0
+      },
+      {
+        "labels": {"job": "node", "instance": "node-1:9100"},
+        "health": "up",
+        "lastError": "",
+        "scrapeDuration": 0.2,
+        "scrapeTimeout": 10.0
+      }
+    ],
+    "droppedTargets": []
+  },
+  "rules": {
+    "groups": [
+      {
+        "name": "availability",
+        "file": "alerts.yml",
+        "rules": [
+          {
+            "name": "ApiDown",
+            "type": "alerting",
+            "health": "ok",
+            "state": "firing",
+            "labels": {},
+            "annotations": {},
+            "alerts": [{"state": "firing"}]
+          },
+          {
+            "name": "BrokenRule",
+            "type": "recording",
+            "health": "err",
+            "lastError": "unknown function"
+          }
+        ]
+      }
+    ]
+  }
+}

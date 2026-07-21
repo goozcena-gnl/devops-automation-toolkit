@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "workstation-doctor",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T20:00:00Z",
+    "completed_at": "2026-07-21T20:00:01Z",
+    "target": "synthetic-windows-workstation",
+    "partial": false,
+    "capabilities": [
+      "tool-discovery",
+      "path-analysis",
+      "git-hygiene",
+      "ssh-hygiene",
+      "wsl",
+      "docker",
+      "kubernetes-contexts",
+      "optional-auth-status"
+    ]
+  },
+  "findings": [
+    {
+      "id": "WORKSTATION-TOOL-MISSING",
+      "tool": "workstation-doctor",
+      "category": "workstation-readiness",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Optional development tool is unavailable",
+      "description": "Synthetic evidence demonstrates how a missing optional executable is reported.",
+      "recommendation": "Install the approved tool version only when the local workflow requires it.",
+      "fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "resource": {
+        "type": "Executable",
+        "name": "example-cli"
+      },
+      "evidence": {
+        "summary": "Synthetic fixture: example-cli was not found on PATH"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "warning",
+  "summary": {
+    "info": 0,
+    "low": 1,
+    "medium": 0,
+    "high": 0,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 1
+  },
+  "extensions": {
+    "native": {
+      "powershell_version": "7.x",
+      "operating_system": "Synthetic Windows 11",
+      "is_64_bit_process": true,
+      "tools": [],
+      "path": {
+        "entries": 3,
+        "duplicate_groups": 0,
+        "missing_entries": 0
+      },
+      "authentication": {
+        "github": "not-checked",
+        "azure": "not-checked",
+        "aws": "not-checked"
+      }
+    },
+    "example_data": "synthetic"
+  }
+}

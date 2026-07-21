@@ -1,0 +1,90 @@
+[build-system]
+requires = ["setuptools>=77,<83"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devops-automation-toolkit"
+version = "1.0.0"
+description = "Production-oriented foundation for deterministic DevOps automation utilities"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "DevOps Automation Toolkit contributors" }]
+keywords = ["devops", "sre", "kubernetes", "terraform", "security", "finops"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Systems Administration",
+]
+dependencies = [
+  "jsonschema>=4.23,<5",
+  "pydantic>=2.11,<3",
+  "PyYAML>=6.0,<7",
+  "rich>=13.9,<15",
+  "typer>=0.16,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "bandit[toml]>=1.8,<2",
+  "build>=1.2,<2",
+  "mypy>=1.15,<2",
+  "pytest>=8.3,<10",
+  "pytest-cov>=6,<8",
+  "ruff>=0.11,<1",
+  "types-PyYAML>=6.0,<7",
+  "types-jsonschema>=4.23,<5",
+  "pip-audit>=2.9,<3",
+  "twine>=6,<7",
+]
+
+[project.scripts]
+devops-toolkit = "devops_toolkit.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/goozcena-gnl/devops-automation-toolkit"
+Documentation = "https://github.com/goozcena-gnl/devops-automation-toolkit/tree/main/docs"
+Issues = "https://github.com/goozcena-gnl/devops-automation-toolkit/issues"
+Changelog = "https://github.com/goozcena-gnl/devops-automation-toolkit/blob/main/CHANGELOG.md"
+
+[tool.setuptools.package-data]
+devops_toolkit = ["resources/schemas/*.json"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers --strict-config --cov=devops_toolkit --cov-report=term-missing"
+testpaths = ["tests"]
+markers = [
+  "integration: requires an external executable or disposable service",
+  "contract: validates schemas and stable interfaces",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["tests/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S105", "S106", "S108", "S603"]
+"src/devops_toolkit/core/models.py" = ["S105"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["devops_toolkit"]
+mypy_path = "src"
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B404", "B603"]

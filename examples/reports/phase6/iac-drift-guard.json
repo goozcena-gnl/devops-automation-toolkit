@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "iac-drift-guard",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T19:26:05.702659Z",
+    "completed_at": "2026-07-21T19:26:05.703627Z",
+    "target": "tests/fixtures/terraform-drift/drift.json:offline-plan",
+    "partial": false,
+    "capabilities": [
+      "read-only",
+      "offline-plan-json",
+      "detailed-exitcode",
+      "state-lock-review",
+      "temporary-plan-cleanup",
+      "no-apply"
+    ]
+  },
+  "findings": [
+    {
+      "id": "IAC-DRIFT-EXTERNAL-UPDATE",
+      "tool": "iac-drift-guard",
+      "category": "iac-drift",
+      "severity": "high",
+      "confidence": "high",
+      "title": "External modification detected: aws_security_group.app",
+      "description": "Terraform/OpenTofu refresh comparison detected drift or a state-safety concern.",
+      "recommendation": "Compare the before and after attributes, identify the change source, and restore the declared configuration or update IaC through review.",
+      "fingerprint": "sha256:a6388c5e0315bbaeb96faeedda50b5a360158173b0970343be6ba16a2a9b84a6",
+      "resource": {
+        "type": "aws_security_group",
+        "name": "aws_security_group.app",
+        "identifier": "aws_security_group.app"
+      },
+      "evidence": {
+        "summary": "actions=['update']; action_reason=not-reported",
+        "location": "aws_security_group.app"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "IAC-DRIFT-REMOTE-DELETION",
+      "tool": "iac-drift-guard",
+      "category": "iac-drift",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Managed resource is missing remotely: aws_db_instance.primary",
+      "description": "Terraform/OpenTofu refresh comparison detected drift or a state-safety concern.",
+      "recommendation": "Confirm whether the deletion was authorized, assess service impact and recovery requirements, and reconcile state only after ownership review.",
+      "fingerprint": "sha256:6685aed775a07eb6abd4e452cce3df14cec76d0af5f371b741f1a2a5c6cee39d",
+      "resource": {
+        "type": "aws_db_instance",
+        "name": "aws_db_instance.primary",
+        "identifier": "aws_db_instance.primary"
+      },
+      "evidence": {
+        "summary": "actions=['delete']; action_reason=not-reported",
+        "location": "aws_db_instance.primary"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "IAC-DRIFT-CHECKS-FAILED",
+      "tool": "iac-drift-guard",
+      "category": "iac-drift",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Terraform checks are not passing",
+      "description": "Terraform/OpenTofu refresh comparison detected drift or a state-safety concern.",
+      "recommendation": "Review failed preconditions, postconditions, and check blocks before using the drift result for remediation decisions.",
+      "fingerprint": "sha256:8c36382cd6053098247e9c3787ef89fd88d01a4bfeb5a774eb8c880a09eed6db",
+      "resource": {
+        "type": "TerraformChecks",
+        "name": "checks",
+        "identifier": "checks"
+      },
+      "evidence": {
+        "summary": "failed_or_unknown_checks=1",
+        "location": "checks"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 0,
+    "high": 2,
+    "critical": 1,
+    "suppressed": 0,
+    "total": 3
+  },
+  "extensions": {
+    "metrics": {
+      "drifted_resources": 2,
+      "updates": 1,
+      "deletions": 1,
+      "replacements": 0,
+      "configuration_changes": 0,
+      "failed_checks": 1
+    },
+    "binary": "terraform",
+    "workspace": "offline-plan",
+    "plan_exit_code": null,
+    "terraform_version": "1.14.0",
+    "format_version": "1.2",
+    "plan_files_persisted": false,
+    "apply_executed": false
+  }
+}

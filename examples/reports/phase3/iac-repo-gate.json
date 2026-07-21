@@ -1,0 +1,156 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "iac-repo-gate",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T15:06:10.563491Z",
+    "completed_at": "2026-07-21T15:06:10.568443Z",
+    "target": "tests/fixtures/iac-repo",
+    "partial": false,
+    "capabilities": [
+      "terraform",
+      "opentofu",
+      "yaml",
+      "helm",
+      "ansible",
+      "sarif"
+    ]
+  },
+  "findings": [
+    {
+      "id": "IAC-TF-REQUIRED-VERSION",
+      "tool": "iac-repo-gate",
+      "category": "infrastructure-as-code",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Terraform or OpenTofu version is not constrained",
+      "description": "Repository policy or validation identified an infrastructure-as-code risk.",
+      "recommendation": "Add a required_version constraint in a terraform block and test supported versions in CI.",
+      "fingerprint": "sha256:9a183b8da39d9b91130e6e56d8e90f27de3cba580fe34ac2eebab21f5bfd2866",
+      "resource": {
+        "type": "File",
+        "name": "main.tf"
+      },
+      "evidence": {
+        "summary": "Terraform or OpenTofu version is not constrained",
+        "location": "main.tf"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "IAC-TF-LOCKFILE-MISSING",
+      "tool": "iac-repo-gate",
+      "category": "infrastructure-as-code",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Provider dependency lock file is missing",
+      "description": "Repository policy or validation identified an infrastructure-as-code risk.",
+      "recommendation": "Generate and commit .terraform.lock.hcl for reproducible provider selection.",
+      "fingerprint": "sha256:472b98a7aa75149774d3357dbf054d794271e8b0c7a9501da92fa3b87ee76114",
+      "resource": {
+        "type": "File",
+        "name": "main.tf"
+      },
+      "evidence": {
+        "summary": "Provider dependency lock file is missing",
+        "location": "main.tf"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "IAC-TF-PUBLIC-INGRESS",
+      "tool": "iac-repo-gate",
+      "category": "infrastructure-as-code",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Unrestricted network source is declared",
+      "description": "Repository policy or validation identified an infrastructure-as-code risk.",
+      "recommendation": "Restrict the source CIDR, document the exception, and place public exposure behind an approved edge control.",
+      "fingerprint": "sha256:904769fae7aba9446a57ca22c6b92dbba50d7a790e756041c6aae38108deba25",
+      "resource": {
+        "type": "File",
+        "name": "main.tf"
+      },
+      "evidence": {
+        "summary": "Unrestricted network source is declared",
+        "location": "main.tf",
+        "line": 6
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "IAC-TF-HARDCODED-CREDENTIAL",
+      "tool": "iac-repo-gate",
+      "category": "infrastructure-as-code",
+      "severity": "critical",
+      "confidence": "medium",
+      "title": "Potential credential is hardcoded in Terraform configuration",
+      "description": "Repository policy or validation identified an infrastructure-as-code risk.",
+      "recommendation": "Remove the value, rotate the credential, and use workload identity or an approved secret store.",
+      "fingerprint": "sha256:c41b42cc068db5c76515e4fc3ecd867e018d8661cf813c45f605f82528da7de5",
+      "resource": {
+        "type": "File",
+        "name": "main.tf"
+      },
+      "evidence": {
+        "summary": "A credential-shaped assignment was found; the value was not captured.",
+        "location": "main.tf",
+        "line": 15
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "IAC-YAML-PARSE-ERROR",
+      "tool": "iac-repo-gate",
+      "category": "infrastructure-as-code",
+      "severity": "high",
+      "confidence": "high",
+      "title": "YAML document cannot be parsed",
+      "description": "Repository policy or validation identified an infrastructure-as-code risk.",
+      "recommendation": "Correct the YAML syntax before merging or deploying this repository.",
+      "fingerprint": "sha256:7740f09f42dc1e564ecee6e80cbefa16444ba3c5ce64e81e2f2402704af974d8",
+      "resource": {
+        "type": "File",
+        "name": "broken.yaml"
+      },
+      "evidence": {
+        "summary": "mapping values are not allowed here",
+        "location": "broken.yaml",
+        "line": 3
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 1,
+    "medium": 1,
+    "high": 2,
+    "critical": 1,
+    "suppressed": 0,
+    "total": 5
+  },
+  "extensions": {
+    "inventory": {
+      "technologies": [
+        "terraform-opentofu",
+        "yaml"
+      ],
+      "terraform_files": 1,
+      "yaml_files": 1,
+      "ansible_files": 0,
+      "helm_charts": 0
+    },
+    "tools": {
+      "terraform-opentofu": {
+        "available": false
+      }
+    }
+  }
+}

@@ -1,0 +1,362 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "enum": [
+            "console",
+            "json",
+            "markdown",
+            "sarif"
+          ]
+        },
+        "severity_threshold": {
+          "enum": [
+            "info",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "no_color": {
+          "type": "boolean"
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "production_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "production_allowlist": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "require_production_acknowledgement": {
+          "type": "boolean"
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "replacement": {
+          "type": "string",
+          "minLength": 3
+        },
+        "extra_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "properties": {
+        "secret-sentinel": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scan_git_history": {
+              "type": "boolean"
+            },
+            "max_commits": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5000
+            },
+            "include_ignored": {
+              "type": "boolean"
+            },
+            "max_file_bytes": {
+              "type": "integer",
+              "minimum": 1024
+            },
+            "excluded_dirs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "iac-repo-gate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "run_optional_tools": {
+              "type": "boolean"
+            }
+          }
+        },
+        "gha-guard": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "kube-triage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "allowed_namespaces": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "allowed_contexts": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "plan-risk": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "replacement_threshold": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            }
+          }
+        },
+        "repo-baseline": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "kubeconfig-hygiene": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "expiry_days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            }
+          }
+        },
+        "image-gate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "require_fixed": {
+              "type": "boolean"
+            }
+          }
+        },
+        "ci-evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_file_bytes": {
+              "type": "integer",
+              "minimum": 1024
+            },
+            "max_total_bytes": {
+              "type": "integer",
+              "minimum": 1024
+            }
+          }
+        },
+        "prom-audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "duration_ratio": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 1.0
+            }
+          }
+        },
+        "slo-budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "kube-rightsize": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "overrequest_ratio": {
+              "type": "number",
+              "minimum": 0.01,
+              "maximum": 0.99
+            },
+            "high_usage_ratio": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 1.5
+            },
+            "allowed_namespaces": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "allowed_contexts": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "tls-audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "warning_days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            },
+            "critical_days": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3650
+            },
+            "workers": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64
+            }
+          }
+        },
+        "cloud-iam-audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "cloud-waste": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "snapshot_age_days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            },
+            "idle_age_days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650
+            },
+            "idle_utilization_percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "required_tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "budget-guard": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "required_thresholds": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "minItems": 1
+            },
+            "anomaly_ratio": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "concentration_ratio": {
+              "type": "number",
+              "minimum": 0.01,
+              "maximum": 1
+            }
+          }
+        },
+        "iac-drift-guard": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "binary": {
+              "type": "string",
+              "enum": [
+                "terraform",
+                "tofu"
+              ]
+            },
+            "lock_timeout_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 600
+            },
+            "stale_lock_minutes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10080
+            }
+          }
+        },
+        "kube-upgrade-readiness": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "allowed_contexts": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": {
+        "type": "object"
+      }
+    }
+  }
+}

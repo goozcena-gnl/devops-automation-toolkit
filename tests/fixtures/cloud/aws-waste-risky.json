@@ -1,0 +1,55 @@
+{
+  "provider": "aws",
+  "scope": "111122223333",
+  "resources": [
+    {
+      "id": "vol-0001",
+      "name": "orphan-volume",
+      "type": "aws::ec2::volume",
+      "region": "eu-west-3a",
+      "attached": false,
+      "age_days": 45,
+      "estimated_monthly_cost": 80,
+      "tags": {"environment": "production"}
+    },
+    {
+      "id": "eipalloc-0001",
+      "name": "unused-eip",
+      "type": "aws::ec2::eip",
+      "region": "eu-west-3",
+      "associated": false,
+      "age_days": 20,
+      "estimated_monthly_cost": 4,
+      "tags": {}
+    },
+    {
+      "id": "snap-0001",
+      "name": "old-snapshot",
+      "type": "aws::ec2::snapshot",
+      "region": "eu-west-3",
+      "age_days": 120,
+      "estimated_monthly_cost": 15,
+      "tags": {"owner": "platform"}
+    },
+    {
+      "id": "lb-0001",
+      "name": "empty-load-balancer",
+      "type": "aws::elasticloadbalancingv2::loadbalancer",
+      "region": "eu-west-3",
+      "target_count": 0,
+      "age_days": 60,
+      "estimated_monthly_cost": 20,
+      "tags": {"owner": "platform", "environment": "production", "cost-center": "cloud"}
+    },
+    {
+      "id": "i-0001",
+      "name": "idle-instance",
+      "type": "aws::ec2::instance",
+      "region": "eu-west-3",
+      "age_days": 40,
+      "utilization_percent": 1.2,
+      "estimated_monthly_cost": 220,
+      "tags": {"owner": "unknown"}
+    }
+  ]
+}

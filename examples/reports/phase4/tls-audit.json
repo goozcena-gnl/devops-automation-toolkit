@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "tls-audit",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T16:00:21.221479Z",
+    "completed_at": "2026-07-21T16:00:21.224850Z",
+    "target": "api.example.test:443",
+    "partial": false,
+    "capabilities": [
+      "hostname-verification",
+      "chain-verification",
+      "expiry",
+      "protocol",
+      "certificate-fingerprint"
+    ]
+  },
+  "findings": [],
+  "status": "pass",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 0,
+    "high": 0,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 0
+  },
+  "extensions": {
+    "endpoints": [
+      {
+        "endpoint": "api.example.test:443",
+        "verified": true,
+        "protocol": "TLSv1.3",
+        "cipher": "TLS_AES_256_GCM_SHA384",
+        "fingerprint": "sha256:fixture-public-certificate-fingerprint",
+        "error_type": null
+      }
+    ],
+    "allow_untrusted_inspection": false
+  }
+}

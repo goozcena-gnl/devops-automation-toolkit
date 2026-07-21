@@ -1,0 +1,35 @@
+{
+  "nodes": {
+    "items": [
+      {
+        "metadata": {"name": "node-1"},
+        "status": {"conditions": [{"type": "Ready", "status": "False"}]}
+      }
+    ]
+  },
+  "pods": {
+    "items": [
+      {
+        "metadata": {"name": "api", "namespace": "payments"},
+        "spec": {"containers": [{"name": "api", "env": [{"name": "PASSWORD", "value": "super-secret-value"}]}]},
+        "status": {
+          "phase": "Pending",
+          "containerStatuses": [
+            {
+              "name": "api",
+              "restartCount": 7,
+              "state": {"waiting": {"reason": "CrashLoopBackOff"}}
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "deployments": {"items": []},
+  "statefulsets": {"items": []},
+  "daemonsets": {"items": []},
+  "jobs": {"items": []},
+  "pvcs": {"items": []},
+  "events": {"items": []},
+  "endpoints": {"items": []}
+}

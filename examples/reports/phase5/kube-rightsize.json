@@ -1,0 +1,152 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "kube-rightsize",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T16:52:07.210348Z",
+    "completed_at": "2026-07-21T16:52:07.211088Z",
+    "target": "fixture-cluster",
+    "partial": false,
+    "capabilities": [
+      "requests-and-limits",
+      "metrics-api-current-usage",
+      "confidence-labelled-recommendations",
+      "read-only-patch-preview"
+    ]
+  },
+  "findings": [
+    {
+      "id": "KUBE-CPU-OVERREQUESTED",
+      "tool": "kube-rightsize",
+      "category": "kubernetes-resources",
+      "severity": "low",
+      "confidence": "low",
+      "title": "CPU request may be oversized: payments/api/api",
+      "description": "Resource request, limit, and current-usage analysis identified a capacity or reliability concern.",
+      "recommendation": "Review a longer observation window before reducing the CPU request.",
+      "fingerprint": "sha256:daf0fa96225c85c848faab140f86760cfbf7908e6ea1ab11e1ee080bb57e1669",
+      "resource": {
+        "type": "Deployment",
+        "name": "api",
+        "namespace": "payments"
+      },
+      "evidence": {
+        "summary": "usage_cores=0.100000; request_cores=1.000000; ratio=0.10"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "KUBE-MEMORY-LIMIT-RISK",
+      "tool": "kube-rightsize",
+      "category": "kubernetes-resources",
+      "severity": "high",
+      "confidence": "medium",
+      "title": "Memory usage is near the limit: payments/api/api",
+      "description": "Resource request, limit, and current-usage analysis identified a capacity or reliability concern.",
+      "recommendation": "Inspect peak memory behavior and OOM history before increasing the limit or fixing the application.",
+      "fingerprint": "sha256:4cee170c0e62b2b212d1dbe4c41242bf3db9952359fd3ca89be7d498da5111ea",
+      "resource": {
+        "type": "Deployment",
+        "name": "api",
+        "namespace": "payments"
+      },
+      "evidence": {
+        "summary": "usage_bytes=576716800; limit_bytes=629145600; ratio=0.92"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "KUBE-RESOURCES-MISSING-REQUEST",
+      "tool": "kube-rightsize",
+      "category": "kubernetes-resources",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Container lacks resource requests: payments/api/sidecar",
+      "description": "Resource request, limit, and current-usage analysis identified a capacity or reliability concern.",
+      "recommendation": "Set evidence-based CPU and memory requests so scheduling and autoscaling have reliable inputs.",
+      "fingerprint": "sha256:7d1e6973362defce8cb1c32ba47420851835b6f531b3ea7df13802e588e3e67d",
+      "resource": {
+        "type": "Deployment",
+        "name": "api",
+        "namespace": "payments"
+      },
+      "evidence": {
+        "summary": "missing=['cpu', 'memory']; pod=api-abc"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "KUBE-RESOURCES-MISSING-LIMIT",
+      "tool": "kube-rightsize",
+      "category": "kubernetes-resources",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Container lacks resource limits: payments/api/sidecar",
+      "description": "Resource request, limit, and current-usage analysis identified a capacity or reliability concern.",
+      "recommendation": "Decide explicitly whether limits are required by workload behavior and namespace policy.",
+      "fingerprint": "sha256:cd961c0f88b7d9cc0ad62e9bbb25cbdc8a59e3fc4434fc3c79143ccfac03e4b4",
+      "resource": {
+        "type": "Deployment",
+        "name": "api",
+        "namespace": "payments"
+      },
+      "evidence": {
+        "summary": "missing=['cpu', 'memory']; pod=api-abc"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 2,
+    "medium": 1,
+    "high": 1,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 4
+  },
+  "extensions": {
+    "scope": {
+      "namespace": "default",
+      "all_namespaces": false
+    },
+    "metrics": {
+      "containers": 2,
+      "containers_with_metrics": 2,
+      "overrequested_cpu": 1,
+      "memory_limit_risk": 1,
+      "missing_requests": 1,
+      "missing_limits": 1
+    },
+    "recommendation_warning": "Current Metrics API samples are insufficient for automatic resizing; validate with longer-window percentile data.",
+    "patch_preview": [
+      {
+        "namespace": "payments",
+        "workload_kind": "Deployment",
+        "workload": "api",
+        "container": "api",
+        "evidence_scope": "current Metrics API sample",
+        "suggested_requests": {
+          "cpu_request": "125m",
+          "memory_request": "688Mi"
+        }
+      },
+      {
+        "namespace": "payments",
+        "workload_kind": "Deployment",
+        "workload": "api",
+        "container": "sidecar",
+        "evidence_scope": "current Metrics API sample",
+        "suggested_requests": {
+          "cpu_request": "12m",
+          "memory_request": "25Mi"
+        }
+      }
+    ]
+  }
+}

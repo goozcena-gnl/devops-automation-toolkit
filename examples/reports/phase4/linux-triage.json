@@ -1,0 +1,124 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "linux-triage",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T16:00:43Z",
+    "completed_at": "2026-07-21T16:00:45.853115Z",
+    "target": "local-linux-host",
+    "partial": true,
+    "capabilities": [
+      "cpu-load",
+      "memory",
+      "filesystems",
+      "processes",
+      "systemd",
+      "network",
+      "kernel-evidence",
+      "sanitized-bundle"
+    ]
+  },
+  "findings": [
+    {
+      "id": "LINUX-CAPABILITY-MISSING",
+      "tool": "linux-triage",
+      "category": "linux-diagnostics",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Some optional diagnostic commands are unavailable",
+      "description": "Read-only host evidence indicates a potential Linux reliability concern.",
+      "recommendation": "Install only the diagnostic utilities appropriate for this host image and operational model.",
+      "fingerprint": "sha256:7020375fa1320f379b8f4c8a2ecedff2b533eb59fdde11ab4d1a6405b0f5b005",
+      "resource": {
+        "type": "LinuxHost",
+        "name": "local-linux-host"
+      },
+      "evidence": {
+        "summary": "missing_commands=['docker', 'podman', 'kubectl']"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "warning",
+  "summary": {
+    "info": 0,
+    "low": 1,
+    "medium": 0,
+    "high": 0,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 1
+  },
+  "extensions": {
+    "host": {
+      "cpu_count": 56,
+      "load_1m": 0.0,
+      "memory_total_bytes": 4294967296,
+      "memory_available_bytes": 3513634816,
+      "swap_total_bytes": 0,
+      "filesystems": [
+        {
+          "mount": "/",
+          "usage_percent": 1
+        },
+        {
+          "mount": "/dev",
+          "usage_percent": 0
+        },
+        {
+          "mount": "/dev/shm",
+          "usage_percent": 0
+        },
+        {
+          "mount": "/etc/hosts",
+          "usage_percent": 2
+        },
+        {
+          "mount": "/caas_toolbox",
+          "usage_percent": 24
+        },
+        {
+          "mount": "/etc/hostname",
+          "usage_percent": 2
+        },
+        {
+          "mount": "/sys/fs/cgroup",
+          "usage_percent": 0
+        },
+        {
+          "mount": "/etc/resolv.conf",
+          "usage_percent": 2
+        }
+      ],
+      "failed_systemd_units": 0,
+      "blocked_processes": 0,
+      "available_commands": [
+        "uname",
+        "uptime",
+        "free",
+        "df",
+        "ps",
+        "ss",
+        "ip",
+        "systemctl",
+        "journalctl",
+        "lsblk",
+        "vmstat"
+      ],
+      "missing_commands": [
+        "docker",
+        "podman",
+        "kubectl"
+      ]
+    },
+    "process_sample": [
+      "  PID  PPID USER     STAT %CPU %MEM ELAPSED COMMAND",
+      "    1     0 root     Ss    0.0  0.1     120 init",
+      "  101     1 app      S     0.1  1.2      42 example-service",
+      "  202   101 app      S     0.0  0.4      18 example-worker"
+    ],
+    "journal_included": false,
+    "example_data": "synthetic"
+  }
+}

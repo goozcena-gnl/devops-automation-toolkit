@@ -1,0 +1,21 @@
+{
+  "provider": "aws",
+  "scope": "111122223333",
+  "budgets": [
+    {
+      "name": "monthly-cloud-budget",
+      "amount": 100,
+      "current_spend": 110,
+      "forecast_spend": 150,
+      "notifications": [
+        {"threshold": 50, "enabled": true, "recipient_count": 1},
+        {"threshold": 80, "enabled": false, "recipient_count": 1}
+      ]
+    }
+  ],
+  "daily_costs": [10, 10, 11, 9, 10, 10, 11, 30, 32, 35],
+  "service_costs": [
+    {"service": "Amazon Elastic Compute Cloud", "amount": 85},
+    {"service": "Other", "amount": 15}
+  ]
+}

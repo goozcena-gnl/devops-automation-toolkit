@@ -1,0 +1,13 @@
+{
+  "run": {"id": 123, "name": "CI", "conclusion": "failure"},
+  "jobs": [
+    {
+      "id": 456,
+      "name": "unit-tests",
+      "conclusion": "failure",
+      "steps": [
+        {"name": "pytest", "conclusion": "failure"}
+      ]
+    }
+  ]
+}

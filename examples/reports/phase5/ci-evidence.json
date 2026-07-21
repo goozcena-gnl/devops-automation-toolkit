@@ -1,0 +1,126 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "ci-evidence",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T16:51:56.737950Z",
+    "completed_at": "2026-07-21T16:51:56.740122Z",
+    "target": "tests/fixtures/ci-logs",
+    "partial": false,
+    "capabilities": [
+      "github-actions-log-download",
+      "offline-log-analysis",
+      "secret-redaction",
+      "failure-signature-grouping",
+      "sanitized-bundle"
+    ]
+  },
+  "findings": [
+    {
+      "id": "CI-TEST-FAILURE",
+      "tool": "ci-evidence",
+      "category": "ci-failure",
+      "severity": "medium",
+      "confidence": "medium",
+      "title": "Test Failure",
+      "description": "A deterministic log signature matched a known CI failure category; it is evidence, not a confirmed root cause.",
+      "recommendation": "Inspect the first causal test failure and reproduce it with the same dependency and environment inputs.",
+      "fingerprint": "sha256:031331a5c2622d491daa47f93471aded10271f41d1ec932791b938f88421f214",
+      "resource": {
+        "type": "CILog",
+        "name": "failure.log",
+        "identifier": "failure.log"
+      },
+      "evidence": {
+        "summary": "pytest: 3 tests failed, 12 passed",
+        "location": "failure.log",
+        "line": 3
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CI-OUT-OF-MEMORY",
+      "tool": "ci-evidence",
+      "category": "ci-failure",
+      "severity": "critical",
+      "confidence": "medium",
+      "title": "Out Of Memory",
+      "description": "A deterministic log signature matched a known CI failure category; it is evidence, not a confirmed root cause.",
+      "recommendation": "Increase memory capacity or reduce job concurrency and memory pressure.",
+      "fingerprint": "sha256:3391aeb3a2fc6f3f459eaa4db21d20bb62fbd3f575a5970bdb4a407d4a8b6a86",
+      "resource": {
+        "type": "CILog",
+        "name": "failure.log",
+        "identifier": "failure.log"
+      },
+      "evidence": {
+        "summary": "runner: process exited with exit code 137, out of memory",
+        "location": "failure.log",
+        "line": 4
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CI-JOB-FAILED",
+      "tool": "ci-evidence",
+      "category": "ci-failure",
+      "severity": "high",
+      "confidence": "high",
+      "title": "CI job failed: unit-tests",
+      "description": "",
+      "recommendation": "Inspect the first failed step and correlate it with the sanitized log signatures.",
+      "fingerprint": "sha256:1921fe4264d7643b03c3599bfb42c7b32fb5b4a67ebdda7ca3575d3ad167e1ca",
+      "resource": {
+        "type": "CIJob",
+        "name": "unit-tests",
+        "identifier": "456"
+      },
+      "evidence": {
+        "summary": "conclusion=failure; failed_steps=['pytest']"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 1,
+    "high": 1,
+    "critical": 1,
+    "suppressed": 0,
+    "total": 3
+  },
+  "extensions": {
+    "log_files": [
+      "failure.log",
+      "metadata.json"
+    ],
+    "signature_counts": {
+      "CI-TEST-FAILURE": 1,
+      "CI-OUT-OF-MEMORY": 1
+    },
+    "timeline": [
+      {
+        "source": "failure.log",
+        "line": 3,
+        "category": "CI-TEST-FAILURE",
+        "excerpt": "pytest: 3 tests failed, 12 passed"
+      },
+      {
+        "source": "failure.log",
+        "line": 4,
+        "category": "CI-OUT-OF-MEMORY",
+        "excerpt": "runner: process exited with exit code 137, out of memory"
+      }
+    ],
+    "run": {
+      "id": 123,
+      "name": "CI",
+      "conclusion": "failure"
+    }
+  }
+}

@@ -1,0 +1,57 @@
+version: '3'
+
+tasks:
+  install-dev:
+    cmds:
+      - python -m pip install -e '.[dev]'
+  format:
+    cmds:
+      - ruff format .
+      - ruff check --fix .
+  lint:
+    cmds:
+      - ruff format --check .
+      - ruff check .
+  typecheck:
+    cmds:
+      - mypy src
+  test-unit:
+    cmds:
+      - pytest tests/unit tests/contract
+  test-integration:
+    cmds:
+      - pytest -m integration --no-cov
+  test:
+    deps: [test-unit, test-integration]
+  security:
+    cmds:
+      - bandit -q -c pyproject.toml -r src
+  dependency-audit:
+    cmds:
+      - pip-audit --progress-spinner off
+  self-audit:
+    cmds:
+      - devops-toolkit secret-sentinel src --format json --output reports/self-audit/secret-source.json
+      - devops-toolkit secret-sentinel scripts --format json --output reports/self-audit/secret-scripts.json
+      - devops-toolkit gha-guard . --format json --output reports/self-audit/gha-guard.json
+  native-validate:
+    cmds:
+      - bash -n scripts/linux/linux-triage.sh
+  contracts:
+    cmds:
+      - python tools/validate_examples.py
+      - python tools/validate_reports.py
+  docs-check:
+    cmds:
+      - python tools/check_docs.py
+      - python tools/generate_catalog.py
+  validate:
+    deps: [lint, typecheck, test, security, contracts, native-validate, docs-check, self-audit]
+  build:
+    cmds:
+      - python -m build
+      - python -m twine check dist/*
+      - python tools/build_release.py
+  catalog:
+    cmds:
+      - python tools/generate_catalog.py

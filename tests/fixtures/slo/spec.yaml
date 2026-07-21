@@ -1,0 +1,12 @@
+name: checkout-availability
+objective: 0.999
+data_file: samples.csv
+burn_windows:
+  - name: fast
+    points: 2
+    threshold: 10
+    severity: critical
+  - name: slow
+    points: 3
+    threshold: 5
+    severity: high

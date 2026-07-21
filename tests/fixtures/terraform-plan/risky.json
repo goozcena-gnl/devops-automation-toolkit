@@ -1,0 +1,27 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.14.0",
+  "resource_changes": [
+    {
+      "address": "aws_db_instance.primary",
+      "type": "aws_db_instance",
+      "change": {
+        "actions": ["delete", "create"],
+        "before": {"storage_encrypted": true, "backup_retention_period": 14},
+        "after": {"storage_encrypted": false, "backup_retention_period": 1, "publicly_accessible": true}
+      }
+    },
+    {
+      "address": "aws_iam_policy.admin",
+      "type": "aws_iam_policy",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {"statement": [{"actions": ["s3:*"], "resources": ["*"]}]}
+      }
+    }
+  ],
+  "output_changes": {
+    "connection_string": {"actions": ["update"], "after_sensitive": true}
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "prom-audit",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T16:52:00.259199Z",
+    "completed_at": "2026-07-21T16:52:00.259851Z",
+    "target": "tests/fixtures/prometheus/snapshot.json",
+    "partial": false,
+    "capabilities": [
+      "targets-api",
+      "rules-api",
+      "expected-job-policy",
+      "scrape-timeout-analysis",
+      "optional-promtool-validation"
+    ]
+  },
+  "findings": [
+    {
+      "id": "PROM-TARGET-DOWN",
+      "tool": "prom-audit",
+      "category": "prometheus",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Prometheus target is down: api/api-1:9090",
+      "description": "Prometheus read-only API analysis identified an observability reliability concern.",
+      "recommendation": "Restore endpoint reachability, authentication, TLS trust, or service discovery before relying on related alerts.",
+      "fingerprint": "sha256:bd08481feae3b704656e150ab2b09c181297e3578218de20618c457addd62ec1",
+      "resource": {
+        "type": "PrometheusTarget",
+        "name": "api/api-1:9090",
+        "identifier": "api/api-1:9090"
+      },
+      "evidence": {
+        "summary": "health=down; last_error=connection refused",
+        "location": "api/api-1:9090"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "PROM-SCRAPE-NEAR-TIMEOUT",
+      "tool": "prom-audit",
+      "category": "prometheus",
+      "severity": "medium",
+      "confidence": "medium",
+      "title": "Scrape duration is near timeout: api/api-1:9090",
+      "description": "Prometheus read-only API analysis identified an observability reliability concern.",
+      "recommendation": "Reduce exporter latency or payload size, or adjust the scrape timeout with evidence.",
+      "fingerprint": "sha256:6fb87d38cb1f9e3acd4a3e68b7fffaaa689157aa2a3d0a448063d05e942c0c50",
+      "resource": {
+        "type": "PrometheusTarget",
+        "name": "api/api-1:9090",
+        "identifier": "api/api-1:9090"
+      },
+      "evidence": {
+        "summary": "duration_seconds=9.0; timeout_seconds=10.0; ratio=0.90",
+        "location": "api/api-1:9090"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "PROM-ALERT-FIRING",
+      "tool": "prom-audit",
+      "category": "prometheus",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Alert rule is firing: ApiDown",
+      "description": "Prometheus read-only API analysis identified an observability reliability concern.",
+      "recommendation": "Confirm whether the alert is actionable, acknowledged, and linked to an owner or runbook.",
+      "fingerprint": "sha256:f8a6aae7f8f94f2b1640c1d504299f75ff009a7ce3cbf9b7790e4e6454bf6ff7",
+      "resource": {
+        "type": "PrometheusAlert",
+        "name": "ApiDown",
+        "identifier": "ApiDown"
+      },
+      "evidence": {
+        "summary": "group=availability; active_alerts=1",
+        "location": "ApiDown"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "PROM-ALERT-MISSING-SEVERITY",
+      "tool": "prom-audit",
+      "category": "prometheus",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Alert lacks a severity label: ApiDown",
+      "description": "Prometheus read-only API analysis identified an observability reliability concern.",
+      "recommendation": "Add a consistent severity label for routing and policy evaluation.",
+      "fingerprint": "sha256:e23e64706722f6bbd00555b4591b7a46a06651d512458d262e4b7f22335229a6",
+      "resource": {
+        "type": "PrometheusAlert",
+        "name": "ApiDown",
+        "identifier": "ApiDown"
+      },
+      "evidence": {
+        "summary": "group=availability",
+        "location": "ApiDown"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "PROM-ALERT-MISSING-SUMMARY",
+      "tool": "prom-audit",
+      "category": "prometheus",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Alert lacks a summary annotation: ApiDown",
+      "description": "Prometheus read-only API analysis identified an observability reliability concern.",
+      "recommendation": "Add concise summary and runbook annotations for responders.",
+      "fingerprint": "sha256:b90f1f87d8e63aacb0408cdbb954d78e4797c44e4ae938116bf06aa99b22eac4",
+      "resource": {
+        "type": "PrometheusAlert",
+        "name": "ApiDown",
+        "identifier": "ApiDown"
+      },
+      "evidence": {
+        "summary": "group=availability",
+        "location": "ApiDown"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "PROM-RULE-UNHEALTHY",
+      "tool": "prom-audit",
+      "category": "prometheus",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Prometheus rule is unhealthy: BrokenRule",
+      "description": "Prometheus read-only API analysis identified an observability reliability concern.",
+      "recommendation": "Correct the PromQL, data dependency, or rule evaluation failure and validate with promtool.",
+      "fingerprint": "sha256:c72f043157c5a58f6c338c9d077777910cde50b56f2ef52199fc32e6f6a13d10",
+      "resource": {
+        "type": "PrometheusRule",
+        "name": "BrokenRule",
+        "identifier": "BrokenRule"
+      },
+      "evidence": {
+        "summary": "group=availability; file=alerts.yml; health=err; last_error=unknown function",
+        "location": "BrokenRule"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 2,
+    "medium": 2,
+    "high": 2,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 6
+  },
+  "extensions": {
+    "targets": {
+      "active": 2,
+      "down": 1,
+      "unknown": 0,
+      "dropped": 0
+    },
+    "rules": {
+      "groups": 1,
+      "rules": 2,
+      "unhealthy": 1,
+      "firing": 1,
+      "pending": 0
+    }
+  }
+}

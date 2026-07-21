@@ -1,0 +1,6 @@
+version: 1
+threshold: high
+exceptions:
+  - fingerprint: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+    justification: Known transient warning during an approved migration window
+    expires_at: '2026-08-31T23:59:59Z'

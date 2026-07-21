@@ -1,0 +1,15 @@
+title = "DevOps Automation Toolkit Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic fixtures and documentation examples"
+paths = [
+  "^tests/fixtures/",
+  "^tests/integration/test_secret_history\\.py$",
+  "^tests/unit/commands/test_ci_evidence\\.py$",
+  "^tests/unit/commands/test_secret_sentinel\\.py$",
+  "^tests/unit/test_cli\\.py$",
+  "^tests/unit/test_redaction\\.py$",
+]

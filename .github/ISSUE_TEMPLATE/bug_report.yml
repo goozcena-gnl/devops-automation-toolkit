@@ -1,0 +1,21 @@
+name: Bug report
+description: Report a reproducible defect using sanitized evidence
+title: "bug: "
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: Observed behavior
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Reproduction steps
+      description: Do not include credentials or private infrastructure details.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Sanitized environment
+    validations:
+      required: true

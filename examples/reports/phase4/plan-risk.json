@@ -1,0 +1,194 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "plan-risk",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T16:00:11.759763Z",
+    "completed_at": "2026-07-21T16:00:11.760514Z",
+    "target": "tests/fixtures/terraform-plan/risky.json",
+    "partial": false,
+    "capabilities": [
+      "resource-actions",
+      "replacement-risk",
+      "public-exposure",
+      "iam-wildcards",
+      "encryption-and-retention"
+    ]
+  },
+  "findings": [
+    {
+      "id": "TFPLAN-RESOURCE-REPLACEMENT",
+      "tool": "plan-risk",
+      "category": "terraform-plan",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Resource `aws_db_instance.primary` will be replaced",
+      "description": "Terraform plan JSON analysis identified a potentially risky infrastructure change.",
+      "recommendation": "Review replacement triggers, data durability, downtime, dependencies, and rollback before approval.",
+      "fingerprint": "sha256:cfb469ae995a0ceabab86270aae3985e1ba4a4406471cf56c52f031f8f9a2d64",
+      "resource": {
+        "type": "aws_db_instance",
+        "name": "aws_db_instance.primary",
+        "identifier": "aws_db_instance.primary"
+      },
+      "evidence": {
+        "summary": "actions=['delete', 'create']",
+        "location": "aws_db_instance.primary"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "TFPLAN-PUBLIC-EXPOSURE",
+      "tool": "plan-risk",
+      "category": "terraform-plan",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Resource `aws_db_instance.primary` introduces public network exposure",
+      "description": "Terraform plan JSON analysis identified a potentially risky infrastructure change.",
+      "recommendation": "Restrict source ranges, disable public access, use private endpoints, or document a reviewed exception.",
+      "fingerprint": "sha256:bb25fb58533994704e05e361ae50933faadc1f6ece1ead92796d470c82e8b8d9",
+      "resource": {
+        "type": "aws_db_instance",
+        "name": "aws_db_instance.primary",
+        "identifier": "aws_db_instance.primary"
+      },
+      "evidence": {
+        "summary": "public_paths=['publicly_accessible']",
+        "location": "aws_db_instance.primary"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "TFPLAN-ENCRYPTION-DISABLED",
+      "tool": "plan-risk",
+      "category": "terraform-plan",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Resource `aws_db_instance.primary` disables encryption",
+      "description": "Terraform plan JSON analysis identified a potentially risky infrastructure change.",
+      "recommendation": "Keep encryption enabled and verify key ownership, rotation, and service compatibility.",
+      "fingerprint": "sha256:30a71a288035753b6cb116220f7d706fbd3d309d6eb68763208b0d05ddbf22a0",
+      "resource": {
+        "type": "aws_db_instance",
+        "name": "aws_db_instance.primary",
+        "identifier": "aws_db_instance.primary"
+      },
+      "evidence": {
+        "summary": "changed_paths=['storage_encrypted']",
+        "location": "aws_db_instance.primary"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "TFPLAN-RETENTION-REDUCED",
+      "tool": "plan-risk",
+      "category": "terraform-plan",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Resource `aws_db_instance.primary` reduces backup or retention settings",
+      "description": "Terraform plan JSON analysis identified a potentially risky infrastructure change.",
+      "recommendation": "Confirm recovery objectives and compliance requirements before reducing retention.",
+      "fingerprint": "sha256:06b4d9601f98a434f5ed00ff4f8e110b0034fe5117b7c0fcdfa039abaa52f9fa",
+      "resource": {
+        "type": "aws_db_instance",
+        "name": "aws_db_instance.primary",
+        "identifier": "aws_db_instance.primary"
+      },
+      "evidence": {
+        "summary": "changes=['backup_retention_period: 14 -> 1']",
+        "location": "aws_db_instance.primary"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "TFPLAN-PUBLIC-EXPOSURE",
+      "tool": "plan-risk",
+      "category": "terraform-plan",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Resource `aws_iam_policy.admin` introduces public network exposure",
+      "description": "Terraform plan JSON analysis identified a potentially risky infrastructure change.",
+      "recommendation": "Restrict source ranges, disable public access, use private endpoints, or document a reviewed exception.",
+      "fingerprint": "sha256:69a370ea641fba82dca02a2f641306c4f613bc2ae843fe8f82632da169e6a38c",
+      "resource": {
+        "type": "aws_iam_policy",
+        "name": "aws_iam_policy.admin",
+        "identifier": "aws_iam_policy.admin"
+      },
+      "evidence": {
+        "summary": "public_paths=['statement[0].resources', 'statement[0].resources[0]']",
+        "location": "aws_iam_policy.admin"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "TFPLAN-IAM-WILDCARD",
+      "tool": "plan-risk",
+      "category": "terraform-plan",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Resource `aws_iam_policy.admin` contains wildcard IAM permissions",
+      "description": "Terraform plan JSON analysis identified a potentially risky infrastructure change.",
+      "recommendation": "Replace wildcard actions and resources with the smallest explicit permission set.",
+      "fingerprint": "sha256:7e6d99c307ff6df91d7605760090e4b4f13aaaf926d689a6cecd23e18f208dc9",
+      "resource": {
+        "type": "aws_iam_policy",
+        "name": "aws_iam_policy.admin",
+        "identifier": "aws_iam_policy.admin"
+      },
+      "evidence": {
+        "summary": "wildcard_paths=['statement[0].actions', 'statement[0].resources']",
+        "location": "aws_iam_policy.admin"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "TFPLAN-SENSITIVE-OUTPUT-CHANGE",
+      "tool": "plan-risk",
+      "category": "terraform-plan",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Sensitive output `connection_string` changes",
+      "description": "",
+      "recommendation": "Verify downstream consumers and ensure the output is not exposed in CI logs or artifacts.",
+      "fingerprint": "sha256:f0da6b26e9f04ba548367194bf399135faff8ec7ea60a2ae856abb82a49c5614",
+      "resource": {
+        "type": "TerraformOutput",
+        "name": "connection_string"
+      },
+      "evidence": {
+        "summary": "actions=['update']"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 1,
+    "high": 1,
+    "critical": 5,
+    "suppressed": 0,
+    "total": 7
+  },
+  "extensions": {
+    "metrics": {
+      "create": 2,
+      "update": 0,
+      "delete": 1,
+      "replace": 1,
+      "no-op": 0,
+      "read": 0
+    },
+    "terraform_version": "1.14.0",
+    "format_version": "1.2"
+  }
+}

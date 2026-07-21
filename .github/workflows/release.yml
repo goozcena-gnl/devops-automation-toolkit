@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install release dependencies
+        run: python -m pip install -e '.[dev]'
+      - name: Verify tag and package version
+        shell: bash
+        run: |
+          test "${GITHUB_REF_NAME}" = "v$(devops-toolkit version)"
+      - name: Validate repository
+        run: make validate
+      - name: Build release assets
+        shell: bash
+        run: |
+          python -m build
+          python -m twine check dist/*
+          python tools/build_release.py
+          cp dist/devops-automation-toolkit-*.zip "$RUNNER_TEMP/source-first.zip"
+          python tools/build_release.py
+          cmp "$RUNNER_TEMP/source-first.zip" dist/devops-automation-toolkit-*.zip
+          sha256sum dist/* > dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: dist/*
+          retention-days: 14

@@ -1,0 +1,118 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "kube-triage",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T15:06:16.488426Z",
+    "completed_at": "2026-07-21T15:06:16.488716Z",
+    "target": "synthetic-development-cluster",
+    "partial": false,
+    "capabilities": [
+      "fixture-analysis",
+      "sanitization"
+    ]
+  },
+  "findings": [
+    {
+      "id": "KUBE-NODE-NOT-READY",
+      "tool": "kube-triage",
+      "category": "kubernetes",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Node `node-1` is not Ready",
+      "description": "Kubernetes read-only evidence indicates a workload or cluster health issue.",
+      "recommendation": "Inspect kubelet status, node events, runtime health, networking, disk, and control-plane connectivity.",
+      "fingerprint": "sha256:cdeaf4d759c36aa95a929dcf33b9d68b85ca2b56e61970c9fe007dcc703d76d0",
+      "resource": {
+        "type": "Node",
+        "name": "node-1",
+        "namespace": "default"
+      },
+      "evidence": {
+        "summary": "Ready condition is False"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "KUBE-POD-PENDING",
+      "tool": "kube-triage",
+      "category": "kubernetes",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Pod `api` is Pending",
+      "description": "Kubernetes read-only evidence indicates a workload or cluster health issue.",
+      "recommendation": "Review scheduling events, resource availability, affinity, taints, PVC binding, and image pull status.",
+      "fingerprint": "sha256:3939912291205e22d3f6da0a133cf34f729e069e00cc70410441769cb47f47b9",
+      "resource": {
+        "type": "Pod",
+        "name": "api",
+        "namespace": "payments"
+      },
+      "evidence": {
+        "summary": "Pod phase is Pending"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "KUBE-CONTAINER-WAITING",
+      "tool": "kube-triage",
+      "category": "kubernetes",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Container `api` is waiting: CrashLoopBackOff",
+      "description": "Kubernetes read-only evidence indicates a workload or cluster health issue.",
+      "recommendation": "Inspect pod events, image access, configuration, previous logs, probes, and runtime constraints.",
+      "fingerprint": "sha256:1d2cd9d37643ea34c748f10caac7e05113944ef09822b9b2c06327f826a5f910",
+      "resource": {
+        "type": "Pod",
+        "name": "api",
+        "namespace": "payments"
+      },
+      "evidence": {
+        "summary": "container=api; reason=CrashLoopBackOff; restarts=7"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "KUBE-CONTAINER-RESTARTS",
+      "tool": "kube-triage",
+      "category": "kubernetes",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Container `api` restarted 7 times",
+      "description": "Kubernetes read-only evidence indicates a workload or cluster health issue.",
+      "recommendation": "Inspect previous logs, termination reasons, probes, dependencies, and resource constraints.",
+      "fingerprint": "sha256:3720bbb1b263c182646722ae62096635292662e6445d7cc015e7560bf8e491ca",
+      "resource": {
+        "type": "Pod",
+        "name": "api",
+        "namespace": "payments"
+      },
+      "evidence": {
+        "summary": "container=api; restartCount=7"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 1,
+    "high": 2,
+    "critical": 1,
+    "suppressed": 0,
+    "total": 4
+  },
+  "extensions": {
+    "scope": {
+      "namespace": "default",
+      "all_namespaces": false
+    },
+    "synthetic_fixture": true
+  }
+}

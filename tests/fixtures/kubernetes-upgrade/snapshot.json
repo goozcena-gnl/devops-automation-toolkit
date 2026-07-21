@@ -1,0 +1,79 @@
+{
+  "version": {
+    "server": {"gitVersion": "v1.31.8"},
+    "client": {"gitVersion": "v1.28.4"}
+  },
+  "api_versions": [
+    "v1",
+    "apps/v1",
+    "flowcontrol.apiserver.k8s.io/v1beta3"
+  ],
+  "api_usages": [
+    {
+      "apiVersion": "policy/v1beta1",
+      "kind": "PodDisruptionBudget",
+      "namespace": "payments",
+      "name": "payments-api"
+    }
+  ],
+  "nodes": {
+    "items": [
+      {
+        "metadata": {"name": "worker-01"},
+        "status": {
+          "conditions": [{"type": "Ready", "status": "False"}],
+          "nodeInfo": {"kubeletVersion": "v1.29.6"}
+        }
+      }
+    ]
+  },
+  "pdbs": {
+    "items": [
+      {
+        "metadata": {"name": "payments-api", "namespace": "payments"},
+        "spec": {"minAvailable": "100%"},
+        "status": {"disruptionsAllowed": 0, "currentHealthy": 2, "desiredHealthy": 2}
+      }
+    ]
+  },
+  "mutating_webhooks": {
+    "items": [
+      {
+        "metadata": {"name": "policy-webhook"},
+        "webhooks": [
+          {
+            "name": "policy.example.invalid",
+            "matchPolicy": "Exact",
+            "timeoutSeconds": 20,
+            "admissionReviewVersions": []
+          }
+        ]
+      }
+    ]
+  },
+  "validating_webhooks": {"items": []},
+  "crds": {
+    "items": [
+      {
+        "metadata": {"name": "widgets.example.invalid"},
+        "spec": {
+          "versions": [
+            {"name": "v1", "served": true, "storage": true}
+          ]
+        },
+        "status": {"storedVersions": ["v1beta1"]}
+      }
+    ]
+  },
+  "api_services": {
+    "items": [
+      {
+        "metadata": {"name": "v1beta1.metrics.k8s.io"},
+        "status": {"conditions": [{"type": "Available", "status": "False"}]}
+      }
+    ]
+  },
+  "addons": [
+    {"kind": "Deployment", "namespace": "kube-system", "name": "coredns", "images": ["registry.k8s.io/coredns/coredns:v1.11.1"]}
+  ]
+}

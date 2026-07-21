@@ -1,0 +1,41 @@
+name: Integration
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'src/devops_toolkit/adapters/**'
+      - 'src/devops_toolkit/commands/**'
+      - 'tests/integration/**'
+      - '.github/workflows/integration.yml'
+
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  local-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -e ".[dev]"
+      - run: pytest -m integration --no-cov
+      - run: scripts/linux/linux-triage.sh --timeout 2 --output reports/linux.json --bundle reports/linux-support.zip
+      - run: python tools/validate_reports.py
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sanitized-foundation-report
+          path: |
+            reports/linux.json
+            reports/linux-support.zip
+          retention-days: 3

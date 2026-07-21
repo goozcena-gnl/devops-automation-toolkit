@@ -1,0 +1,30 @@
+{
+  "SchemaVersion": 2,
+  "ArtifactName": "example.invalid/app:1.0",
+  "ArtifactType": "container_image",
+  "Results": [
+    {
+      "Target": "app-layer",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2099-0001",
+          "PkgName": "demo-lib",
+          "InstalledVersion": "1.0",
+          "FixedVersion": "1.1",
+          "Severity": "CRITICAL",
+          "References": ["https://example.invalid/CVE-2099-0001"]
+        }
+      ],
+      "Secrets": [
+        {
+          "RuleID": "synthetic-api-key",
+          "Category": "API Key",
+          "Severity": "HIGH",
+          "Title": "config.txt",
+          "StartLine": 4,
+          "Match": "SYNTHETIC_SECRET_VALUE_MUST_NOT_APPEAR"
+        }
+      ]
+    }
+  ]
+}

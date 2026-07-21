@@ -1,0 +1,257 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "cloud-waste",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T19:26:04.945332Z",
+    "completed_at": "2026-07-21T19:26:04.946213Z",
+    "target": "aws:111122223333",
+    "partial": false,
+    "capabilities": [
+      "read-only",
+      "report-only",
+      "offline-snapshot",
+      "provider:aws"
+    ]
+  },
+  "findings": [
+    {
+      "id": "CLOUD-WASTE-UNATTACHED-STORAGE",
+      "tool": "cloud-waste",
+      "category": "cloud-finops",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Unattached storage resource: orphan-volume",
+      "description": "The resource appears unused, orphaned, idle, or outside the configured governance baseline.",
+      "recommendation": "Confirm backup and ownership requirements, snapshot if policy requires it, then remove through the normal change process. This tool does not delete resources.",
+      "fingerprint": "sha256:8b93c4212c04907925285c50fe11367d58dc636f9cdd02c56cac65db2b0c0f10",
+      "resource": {
+        "type": "aws::ec2::volume",
+        "name": "orphan-volume",
+        "provider": "aws",
+        "identifier": "vol-0001"
+      },
+      "evidence": {
+        "summary": "attached=false; age_days=45; estimated_monthly_cost=80.00",
+        "location": "eu-west-3a"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-WASTE-MISSING-REQUIRED-TAGS",
+      "tool": "cloud-waste",
+      "category": "cloud-finops",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Resource is missing governance tags: orphan-volume",
+      "description": "The resource appears unused, orphaned, idle, or outside the configured governance baseline.",
+      "recommendation": "Add the required ownership, environment, cost-center, and lifecycle tags through the authoritative IaC source.",
+      "fingerprint": "sha256:c706fb1f9da43e311aafdb3eac73479dc1b47bef41a82332f0206fef6eb010df",
+      "resource": {
+        "type": "aws::ec2::volume",
+        "name": "orphan-volume",
+        "provider": "aws",
+        "identifier": "vol-0001"
+      },
+      "evidence": {
+        "summary": "missing_tags=cost-center,owner",
+        "location": "eu-west-3a"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-WASTE-UNASSOCIATED-PUBLIC-IP",
+      "tool": "cloud-waste",
+      "category": "cloud-finops",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Unassociated public IP: unused-eip",
+      "description": "The resource appears unused, orphaned, idle, or outside the configured governance baseline.",
+      "recommendation": "Verify DNS, allowlists, and pending deployments before releasing the address through an approved change.",
+      "fingerprint": "sha256:5fcdeab86066fb1acc676561d213f3c8b8af9e819762249764c29b4395367d73",
+      "resource": {
+        "type": "aws::ec2::eip",
+        "name": "unused-eip",
+        "provider": "aws",
+        "identifier": "eipalloc-0001"
+      },
+      "evidence": {
+        "summary": "associated=false; age_days=20; estimated_monthly_cost=4.00",
+        "location": "eu-west-3"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-WASTE-MISSING-REQUIRED-TAGS",
+      "tool": "cloud-waste",
+      "category": "cloud-finops",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Resource is missing governance tags: unused-eip",
+      "description": "The resource appears unused, orphaned, idle, or outside the configured governance baseline.",
+      "recommendation": "Add the required ownership, environment, cost-center, and lifecycle tags through the authoritative IaC source.",
+      "fingerprint": "sha256:ac909faf7a4d30766e15496cd6d481ff22dcddc785f79dc0a7097e3378e4ec09",
+      "resource": {
+        "type": "aws::ec2::eip",
+        "name": "unused-eip",
+        "provider": "aws",
+        "identifier": "eipalloc-0001"
+      },
+      "evidence": {
+        "summary": "missing_tags=cost-center,environment,owner",
+        "location": "eu-west-3"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-WASTE-OLD-SNAPSHOT",
+      "tool": "cloud-waste",
+      "category": "cloud-finops",
+      "severity": "low",
+      "confidence": "medium",
+      "title": "Snapshot exceeds retention review threshold: old-snapshot",
+      "description": "The resource appears unused, orphaned, idle, or outside the configured governance baseline.",
+      "recommendation": "Validate retention, legal hold, recovery objectives, and source-resource status before deleting or tiering the snapshot.",
+      "fingerprint": "sha256:bdca4a03ccaaf51b69d0af2d9c10fc06f561a8abdc99daebe32206783b20d483",
+      "resource": {
+        "type": "aws::ec2::snapshot",
+        "name": "old-snapshot",
+        "provider": "aws",
+        "identifier": "snap-0001"
+      },
+      "evidence": {
+        "summary": "age_days=120; review_threshold_days=30; estimated_monthly_cost=15.00",
+        "location": "eu-west-3"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-WASTE-MISSING-REQUIRED-TAGS",
+      "tool": "cloud-waste",
+      "category": "cloud-finops",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Resource is missing governance tags: old-snapshot",
+      "description": "The resource appears unused, orphaned, idle, or outside the configured governance baseline.",
+      "recommendation": "Add the required ownership, environment, cost-center, and lifecycle tags through the authoritative IaC source.",
+      "fingerprint": "sha256:e48ca916255c15fa2d65c82316de68657f49e3660d9d533a37d7f2d89477d02a",
+      "resource": {
+        "type": "aws::ec2::snapshot",
+        "name": "old-snapshot",
+        "provider": "aws",
+        "identifier": "snap-0001"
+      },
+      "evidence": {
+        "summary": "missing_tags=cost-center,environment",
+        "location": "eu-west-3"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-WASTE-EMPTY-LOAD-BALANCER",
+      "tool": "cloud-waste",
+      "category": "cloud-finops",
+      "severity": "medium",
+      "confidence": "medium",
+      "title": "Load balancer has no registered targets: empty-load-balancer",
+      "description": "The resource appears unused, orphaned, idle, or outside the configured governance baseline.",
+      "recommendation": "Confirm whether this is a standby endpoint or deployment placeholder, then remove it through an approved change if unused.",
+      "fingerprint": "sha256:438380837582283dc001c1cc184deb1e2c93a646b51f1fc75b47deaa8adbc8dd",
+      "resource": {
+        "type": "aws::elasticloadbalancingv2::loadbalancer",
+        "name": "empty-load-balancer",
+        "provider": "aws",
+        "identifier": "lb-0001"
+      },
+      "evidence": {
+        "summary": "target_count=0; age_days=60; estimated_monthly_cost=20.00",
+        "location": "eu-west-3"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-WASTE-IDLE-COMPUTE",
+      "tool": "cloud-waste",
+      "category": "cloud-finops",
+      "severity": "high",
+      "confidence": "medium",
+      "title": "Compute resource appears idle: idle-instance",
+      "description": "The resource appears unused, orphaned, idle, or outside the configured governance baseline.",
+      "recommendation": "Validate application schedules and percentile metrics over a representative window before stopping, resizing, or removing the resource.",
+      "fingerprint": "sha256:037a2ac4c8a5c68a6572d1c786c0011355802ca86b2200092e5721badaf23a06",
+      "resource": {
+        "type": "aws::ec2::instance",
+        "name": "idle-instance",
+        "provider": "aws",
+        "identifier": "i-0001"
+      },
+      "evidence": {
+        "summary": "utilization_percent=1.20; threshold_percent=5.00; observation_age_days=40; estimated_monthly_cost=220.00",
+        "location": "eu-west-3"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "CLOUD-WASTE-MISSING-REQUIRED-TAGS",
+      "tool": "cloud-waste",
+      "category": "cloud-finops",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Resource is missing governance tags: idle-instance",
+      "description": "The resource appears unused, orphaned, idle, or outside the configured governance baseline.",
+      "recommendation": "Add the required ownership, environment, cost-center, and lifecycle tags through the authoritative IaC source.",
+      "fingerprint": "sha256:8001686ac3ba9ad44a76bea61e7b2e2e36966c351357e58298fdd5d3308d0bb7",
+      "resource": {
+        "type": "aws::ec2::instance",
+        "name": "idle-instance",
+        "provider": "aws",
+        "identifier": "i-0001"
+      },
+      "evidence": {
+        "summary": "missing_tags=cost-center,environment",
+        "location": "eu-west-3"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 5,
+    "medium": 3,
+    "high": 1,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 9
+  },
+  "extensions": {
+    "provider": "aws",
+    "metrics": {
+      "resources_analyzed": 5,
+      "unattached_storage": 1,
+      "unassociated_public_ips": 1,
+      "orphaned_interfaces": 0,
+      "old_snapshots": 1,
+      "empty_load_balancers": 1,
+      "idle_compute": 1,
+      "missing_required_tags": 4,
+      "estimated_monthly_waste": 339.0
+    },
+    "required_tags": [
+      "cost-center",
+      "environment",
+      "owner"
+    ],
+    "collection_notes": [],
+    "destructive_actions_available": false
+  }
+}

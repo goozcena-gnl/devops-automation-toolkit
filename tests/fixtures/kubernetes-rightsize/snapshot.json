@@ -1,0 +1,40 @@
+{
+  "context": "fixture-cluster",
+  "pods": {
+    "items": [
+      {
+        "metadata": {
+          "name": "api-abc",
+          "namespace": "payments",
+          "ownerReferences": [{"kind": "Deployment", "name": "api"}]
+        },
+        "spec": {
+          "containers": [
+            {
+              "name": "api",
+              "resources": {
+                "requests": {"cpu": "1000m", "memory": "512Mi"},
+                "limits": {"cpu": "2", "memory": "600Mi"}
+              }
+            },
+            {
+              "name": "sidecar",
+              "resources": {}
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "metrics": {
+    "items": [
+      {
+        "metadata": {"name": "api-abc", "namespace": "payments"},
+        "containers": [
+          {"name": "api", "usage": {"cpu": "100m", "memory": "550Mi"}},
+          {"name": "sidecar", "usage": {"cpu": "10m", "memory": "20Mi"}}
+        ]
+      }
+    ]
+  }
+}

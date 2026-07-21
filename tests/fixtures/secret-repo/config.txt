@@ -1,0 +1,2 @@
+service_token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+normal_value = "not-sensitive"

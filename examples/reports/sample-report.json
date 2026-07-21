@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "devops-toolkit",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T20:17:44.881868Z",
+    "completed_at": "2026-07-21T20:17:44.882360Z",
+    "target": "local-foundation",
+    "partial": false,
+    "capabilities": [
+      "json",
+      "markdown",
+      "sarif",
+      "redaction",
+      "safe-subprocess"
+    ]
+  },
+  "findings": [
+    {
+      "id": "FOUNDATION-EXAMPLE",
+      "tool": "devops-toolkit",
+      "category": "foundation",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Synthetic foundation finding",
+      "description": "Used to verify output contracts without external infrastructure.",
+      "recommendation": "Replace the synthetic collector during the relevant implementation phase.",
+      "fingerprint": "sha256:33b7ee495ca8cb3d313acefc2f6d1efc139d40bddb2952d16d51a10991536af1",
+      "resource": {
+        "type": "Repository",
+        "name": "devops-automation-toolkit"
+      },
+      "evidence": {
+        "summary": "A deterministic synthetic fixture was loaded"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "warning",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 1,
+    "high": 0,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 1
+  },
+  "extensions": {}
+}

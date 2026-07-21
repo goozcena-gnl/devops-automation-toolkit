@@ -1,0 +1,155 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "cloud-iam-audit",
+    "tool_version": "1.0.0",
+    "started_at": "2026-07-21T19:26:04.522524Z",
+    "completed_at": "2026-07-21T19:26:04.523585Z",
+    "target": "azure:00000000-0000-0000-0000-000000000001",
+    "partial": false,
+    "capabilities": [
+      "read-only",
+      "offline-snapshot",
+      "provider:azure",
+      "secret-values-not-collected"
+    ]
+  },
+  "findings": [
+    {
+      "id": "AZURE-IAM-BROAD-PRIVILEGED-ROLE",
+      "tool": "cloud-iam-audit",
+      "category": "cloud-iam",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Broad Owner assignment",
+      "description": "The effective cloud identity configuration contains a potentially excessive or stale permission path.",
+      "recommendation": "Replace the assignment with the narrowest built-in or custom role at the smallest practical scope, then validate dependent workflows.",
+      "fingerprint": "sha256:6f9340593e49513151c073a51f1876d011ac9ffb78c3c902d39a31f0fc918308",
+      "resource": {
+        "type": "RoleAssignment",
+        "name": "legacy-deployer",
+        "provider": "azure",
+        "identifier": "legacy-deployer"
+      },
+      "evidence": {
+        "summary": "principal=legacy-deployer; principal_type=ServicePrincipal; scope=/subscriptions/00000000-0000-0000-0000-000000000001"
+      },
+      "references": [
+        "https://learn.microsoft.com/azure/role-based-access-control/best-practices"
+      ],
+      "suppressed": false
+    },
+    {
+      "id": "AZURE-IAM-BROAD-PRIVILEGED-ROLE",
+      "tool": "cloud-iam-audit",
+      "category": "cloud-iam",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Broad Contributor assignment",
+      "description": "The effective cloud identity configuration contains a potentially excessive or stale permission path.",
+      "recommendation": "Replace the assignment with the narrowest built-in or custom role at the smallest practical scope, then validate dependent workflows.",
+      "fingerprint": "sha256:90c7eabf22c6372ed0a10c2a1ca659cf4c8fd617ec1e65d297175f0e8557184a",
+      "resource": {
+        "type": "RoleAssignment",
+        "name": "deleted-principal-id",
+        "provider": "azure",
+        "identifier": "deleted-principal-id"
+      },
+      "evidence": {
+        "summary": "principal=deleted-principal-id; principal_type=Unknown; scope=/subscriptions/00000000-0000-0000-0000-000000000001"
+      },
+      "references": [
+        "https://learn.microsoft.com/azure/role-based-access-control/best-practices"
+      ],
+      "suppressed": false
+    },
+    {
+      "id": "AZURE-IAM-UNKNOWN-PRINCIPAL",
+      "tool": "cloud-iam-audit",
+      "category": "cloud-iam",
+      "severity": "high",
+      "confidence": "medium",
+      "title": "Role assignment references an unknown principal",
+      "description": "The effective cloud identity configuration contains a potentially excessive or stale permission path.",
+      "recommendation": "Confirm whether the identity was deleted and remove the orphaned assignment after dependency review.",
+      "fingerprint": "sha256:11da908ffdbb72ec5f7e3b6fa57a883b43c8b0ec6a7822e68f6faf7eb7a3d161",
+      "resource": {
+        "type": "RoleAssignment",
+        "name": "deleted-principal-id",
+        "provider": "azure",
+        "identifier": "deleted-principal-id"
+      },
+      "evidence": {
+        "summary": "role=Contributor; scope=/subscriptions/00000000-0000-0000-0000-000000000001; principal_identifier=deleted-principal-id"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "AZURE-IAM-CUSTOM-ROLE-WILDCARD",
+      "tool": "cloud-iam-audit",
+      "category": "cloud-iam",
+      "severity": "critical",
+      "confidence": "high",
+      "title": "Custom role contains wildcard permissions: Unrestricted Automation",
+      "description": "The effective cloud identity configuration contains a potentially excessive or stale permission path.",
+      "recommendation": "Replace wildcard actions with an explicit operation allowlist and add NotActions only as a secondary safeguard.",
+      "fingerprint": "sha256:b1b9629368371d0b4a74336a3e756ceb1e99c9626bbd1964c4bfdfd32a6fb044",
+      "resource": {
+        "type": "RoleDefinition",
+        "name": "Unrestricted Automation",
+        "provider": "azure",
+        "identifier": "Unrestricted Automation"
+      },
+      "evidence": {
+        "summary": "wildcard_actions=*"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "AZURE-IAM-EXPIRED-CREDENTIAL",
+      "tool": "cloud-iam-audit",
+      "category": "cloud-iam",
+      "severity": "high",
+      "confidence": "high",
+      "title": "Expired service-principal credential: legacy-deployer",
+      "description": "The effective cloud identity configuration contains a potentially excessive or stale permission path.",
+      "recommendation": "Rotate or remove the credential, prefer workload identity or managed identity, and verify that no dependent workload uses the old credential.",
+      "fingerprint": "sha256:5630415921ba1f68fafb4d525dec74a172cea3e1a39ea02555a7c8493e85227c",
+      "resource": {
+        "type": "ServicePrincipal",
+        "name": "legacy-deployer",
+        "provider": "azure",
+        "identifier": "legacy-deployer"
+      },
+      "evidence": {
+        "summary": "credential_type=password; days_remaining=-2394; secret_value=not_collected"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "fail",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 0,
+    "high": 3,
+    "critical": 2,
+    "suppressed": 0,
+    "total": 5
+  },
+  "extensions": {
+    "provider": "azure",
+    "metrics": {
+      "role_assignments": 2,
+      "broad_privileged_assignments": 2,
+      "unknown_principals": 1,
+      "custom_roles_with_wildcards": 1,
+      "expired_credentials": 1,
+      "expiring_credentials": 0
+    },
+    "collection_notes": []
+  }
+}

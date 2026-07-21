@@ -1,0 +1,79 @@
+version: 1
+defaults:
+  format: console
+  severity_threshold: high
+  timeout_seconds: 30
+  no_color: false
+safety:
+  production_patterns:
+  - (?i)(^|[-_/])(prod|production|live)([-_/]|$)
+  production_allowlist: []
+  require_production_acknowledgement: true
+redaction:
+  replacement: '[REDACTED]'
+  extra_patterns: []
+tools:
+  secret-sentinel:
+    scan_git_history: false
+    max_commits: 50
+    include_ignored: false
+    max_file_bytes: 1000000
+    excluded_dirs:
+    - .cache
+  iac-repo-gate:
+    run_optional_tools: true
+  gha-guard: {}
+  kube-triage:
+    allowed_namespaces:
+    - default
+    - platform-system
+    allowed_contexts:
+    - development-cluster
+  plan-risk:
+    replacement_threshold: 10
+  repo-baseline: {}
+  kubeconfig-hygiene:
+    expiry_days: 30
+  tls-audit:
+    warning_days: 30
+    critical_days: 7
+    workers: 8
+  image-gate:
+    require_fixed: false
+  ci-evidence:
+    max_file_bytes: 2000000
+    max_total_bytes: 25000000
+  prom-audit:
+    duration_ratio: 0.8
+  slo-budget: {}
+  kube-rightsize:
+    overrequest_ratio: 0.25
+    high_usage_ratio: 0.85
+    allowed_namespaces:
+    - default
+    - payments
+    allowed_contexts:
+    - development-cluster
+  cloud-iam-audit: {}
+  cloud-waste:
+    snapshot_age_days: 30
+    idle_age_days: 14
+    idle_utilization_percent: 5.0
+    required_tags:
+    - owner
+    - environment
+    - cost-center
+  budget-guard:
+    required_thresholds:
+    - 50
+    - 80
+    - 100
+    anomaly_ratio: 1.5
+    concentration_ratio: 0.6
+  iac-drift-guard:
+    binary: terraform
+    lock_timeout_seconds: 15
+    stale_lock_minutes: 60
+  kube-upgrade-readiness:
+    allowed_contexts:
+    - development-cluster
