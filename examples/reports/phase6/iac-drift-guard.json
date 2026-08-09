@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "iac-drift-guard",
-    "tool_version": "1.0.0",
+    "tool_version": "1.0.1",
     "started_at": "2026-07-21T19:26:05.702659Z",
     "completed_at": "2026-07-21T19:26:05.703627Z",
     "target": "tests/fixtures/terraform-drift/drift.json:offline-plan",

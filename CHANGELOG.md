@@ -4,9 +4,21 @@ All notable changes are documented here. The format follows Keep a Changelog and
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-09
+
 ### Added
 
+- Fixture-backed report-format evidence and repository social-preview assets, with the existing MIT license surfaced in the README.
 - Curated five-tool inspection path and architecture interview walkthrough.
+
+### Changed
+
+- Corrected P0/P1 portfolio maturity and evidence wording without broadening the toolkit's validated scope.
+- Aligned current Python package, native collector, checked-in report example, install, and release metadata with version 1.0.1 while retaining report schema version `1.0`.
+
+### Validation boundary
+
+- Tool behavior, stable exit codes, configuration precedence, and read-only/report-only defaults are unchanged; fixture and hosted validation are not presented as live-provider proof.
 
 ## [1.0.0] - 2026-07-21
 

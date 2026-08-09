@@ -2,7 +2,7 @@
 
 > An installable Python CLI that converts cloud and platform evidence into deterministic, redacted JSON, Markdown, and SARIF reports across 20 read-only-first tools.
 
-Version 1.0.0 is locally validated and tagged; GitHub-hosted CI/security gates pass, but live providers and the native PowerShell collector require target-environment validation. No GitHub Release has been published.
+The immutable `v1.0.0` tag and its unpublished draft are retained as release history. Version 1.0.1 is its first publishable successor; deterministic local and hosted checks do not replace target-environment validation for live providers or the native PowerShell collector.
 
 [![CI](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/ci.yml)
 [![Security](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/security.yml)
@@ -63,7 +63,7 @@ devops-toolkit version
 ### From a built wheel
 
 ```bash
-python -m pip install devops_automation_toolkit-1.0.0-py3-none-any.whl
+python -m pip install devops_automation_toolkit-1.0.1-py3-none-any.whl
 devops-toolkit health
 ```
 

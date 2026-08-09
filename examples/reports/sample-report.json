@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "devops-toolkit",
-    "tool_version": "1.0.0",
+    "tool_version": "1.0.1",
     "started_at": "2026-07-21T20:17:44.881868Z",
     "completed_at": "2026-07-21T20:17:44.882360Z",
     "target": "local-foundation",

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "image-gate",
-    "tool_version": "1.0.0",
+    "tool_version": "1.0.1",
     "started_at": "2026-07-21T16:51:53.203936Z",
     "completed_at": "2026-07-21T16:51:53.204458Z",
     "target": "synthetic.local/demo:1.0",

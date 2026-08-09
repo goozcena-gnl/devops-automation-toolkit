@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "budget-guard",
-    "tool_version": "1.0.0",
+    "tool_version": "1.0.1",
     "started_at": "2026-07-21T19:26:05.322151Z",
     "completed_at": "2026-07-21T19:26:05.322948Z",
     "target": "aws:111122223333",

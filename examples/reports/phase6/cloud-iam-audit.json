@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "cloud-iam-audit",
-    "tool_version": "1.0.0",
+    "tool_version": "1.0.1",
     "started_at": "2026-07-21T19:26:04.522524Z",
     "completed_at": "2026-07-21T19:26:04.523585Z",
     "target": "azure:00000000-0000-0000-0000-000000000001",
