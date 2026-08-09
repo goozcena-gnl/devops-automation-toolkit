@@ -1,5 +1,11 @@
 # Script catalog
 
+New to the repository? Begin with the README's
+[five-tool inspection path](../README.md#what-to-inspect-first), then use the
+[architecture interview walkthrough](interview-walkthrough.md) to connect those
+examples to the shared safety, finding, reporting, and validation contracts.
+This catalog remains the complete 20-tool inventory.
+
 | Rank | ID | Entry point | Status | Primary dependencies |
 |---:|---|---|---|---|
 | 1 | secret-sentinel | `devops-toolkit secret-sentinel` | Implemented | Git optional, redaction, SARIF |

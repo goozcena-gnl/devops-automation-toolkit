@@ -71,6 +71,53 @@ The wheel contains the Python CLI and versioned JSON schemas. The native Bash an
 
 Checked-in reports under `examples/reports/` are synthetic or fixture-backed contract examples. They are not live assessments of a cloud account, cluster, workstation, or host.
 
+## What to inspect first
+
+These five tools provide a fast route through the toolkit's main collection,
+analysis, safety, and reporting patterns. Follow them with the
+[architecture interview walkthrough](docs/interview-walkthrough.md), then use
+the [complete catalog](#tool-catalog) to inspect all 20 tools.
+
+### 1. [Secret Sentinel](docs/tools/secret-sentinel.md)
+
+- **Problem:** Detect credential-shaped material in files and optional Git history.
+- **Input/evidence:** A readable directory, optional bounded commit history, and an optional fingerprint baseline; see the [fixture-backed report](examples/reports/phase3/secret-sentinel.json).
+- **Safety:** History scanning is opt-in and bounded; binary/oversized content is skipped, and matched secret values are never serialized.
+- **Output:** Console, JSON, Markdown, or SARIF findings with locations, detector identity, and non-reversible fingerprints.
+- **Why inspect it:** It demonstrates bounded local collection, redaction, suppression, deterministic detection, and code-scanning output.
+
+### 2. [IaC Repository Gate](docs/tools/iac-repo-gate.md)
+
+- **Problem:** Apply one quality and security gate to Terraform/OpenTofu, YAML, Helm, and Ansible repositories.
+- **Input/evidence:** Repository inventory plus optional locally installed validator results; see the [fixture-backed report](examples/reports/phase3/iac-repo-gate.json).
+- **Safety:** Validator commands use argument vectors, timeouts, bounded sanitized output, and never run plan, apply, deployment, or remediation.
+- **Output:** Normalized reports with built-in findings, validator availability, and explicit partial-evidence status for incomplete execution.
+- **Why inspect it:** It shows deterministic analysis combined with safely orchestrated optional dependencies and honest degradation.
+
+### 3. [Kubernetes Triage](docs/tools/kube-triage.md)
+
+- **Problem:** Turn a scoped cluster-health snapshot into actionable incident findings.
+- **Input/evidence:** Read-only `kubectl get ... -o json` collection for an explicit context and namespace; see the [fake-kubectl fixture report](examples/reports/phase3/kube-triage.json).
+- **Safety:** Context/namespace allowlists and production acknowledgement constrain scope; Secret objects are never requested, and bundles are sanitized before atomic persistence.
+- **Output:** Console, JSON, Markdown, or SARIF plus an optional sanitized evidence ZIP; failed collections remain visible as partial evidence.
+- **Why inspect it:** It demonstrates guarded external collection, per-resource failure handling, redaction, analysis, and archive safety.
+
+### 4. [GitHub Actions Guard](docs/tools/gha-guard.md)
+
+- **Problem:** Find workflow security and reliability risks before Actions execution.
+- **Input/evidence:** Local `.github/workflows/*.yml` and `.yaml` files only; see the [synthetic SARIF report](examples/reports/phase3/gha-guard.sarif).
+- **Safety:** Static parsing performs no workflow execution, network resolution, or GitHub mutation.
+- **Output:** Normalized console, JSON, Markdown, or SARIF findings with workflow paths and best-effort source lines.
+- **Why inspect it:** It isolates deterministic policy analysis and source-aware reporting from collection and provider access.
+
+### 5. [SLO Budget Calculator](docs/tools/slo-budget.md)
+
+- **Problem:** Calculate SLI compliance, remaining error budget, and configured multi-window burn rates.
+- **Input/evidence:** A YAML specification selecting CSV/JSON samples or a read-only Prometheus range query; see the [fixture-backed calculation report](examples/reports/phase5/slo-budget.json).
+- **Safety:** Input validation and bounded HTTP timeouts apply; bearer tokens are read from named environment variables, and the command performs no remediation or mutation.
+- **Output:** Shared-schema reports that distinguish no data from zero failures and expose compliance, budget consumption, and burn calculations.
+- **Why inspect it:** It demonstrates deterministic numerical analysis across offline fixtures and an explicitly scoped live read-only adapter.
+
 ## Tool catalog
 
 | Rank | Tool | Entry point | Language | Primary use |
