@@ -4,6 +4,10 @@ All notable changes are documented here. The format follows Keep a Changelog and
 
 ## [Unreleased]
 
+### Added
+
+- Curated five-tool inspection path and architecture interview walkthrough.
+
 ## [1.0.0] - 2026-07-21
 
 ### Added
