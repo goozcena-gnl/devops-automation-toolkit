@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "workstation-doctor",
-    "tool_version": "1.0.0",
+    "tool_version": "1.0.1",
     "started_at": "2026-07-21T20:00:00Z",
     "completed_at": "2026-07-21T20:00:01Z",
     "target": "synthetic-windows-workstation",

@@ -29,4 +29,4 @@ def test_linux_foundation_collector(repository_root: Path, tmp_path: Path) -> No
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["metadata"]["tool"] == "linux-triage"
     assert "host" in payload["extensions"]
-    assert payload["metadata"]["tool_version"] == "1.0.0"
+    assert payload["metadata"]["tool_version"] == "1.0.1"

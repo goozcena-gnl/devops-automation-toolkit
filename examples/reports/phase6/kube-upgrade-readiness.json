@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "kube-upgrade-readiness",
-    "tool_version": "1.0.0",
+    "tool_version": "1.0.1",
     "started_at": "2026-07-21T19:26:06.092425Z",
     "completed_at": "2026-07-21T19:26:06.093247Z",
     "target": "offline-snapshot->1.33.0",

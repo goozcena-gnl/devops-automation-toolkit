@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "tls-audit",
-    "tool_version": "1.0.0",
+    "tool_version": "1.0.1",
     "started_at": "2026-07-21T16:00:21.221479Z",
     "completed_at": "2026-07-21T16:00:21.224850Z",
     "target": "api.example.test:443",

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "cloud-waste",
-    "tool_version": "1.0.0",
+    "tool_version": "1.0.1",
     "started_at": "2026-07-21T19:26:04.945332Z",
     "completed_at": "2026-07-21T19:26:04.946213Z",
     "target": "aws:111122223333",

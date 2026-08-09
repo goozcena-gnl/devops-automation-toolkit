@@ -6,7 +6,7 @@
       "tool": {
         "driver": {
           "name": "devops-toolkit",
-          "version": "1.0.0",
+          "version": "1.0.1",
           "rules": [
             {
               "id": "FOUNDATION-EXAMPLE",

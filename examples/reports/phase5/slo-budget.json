@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "slo-budget",
-    "tool_version": "1.0.0",
+    "tool_version": "1.0.1",
     "started_at": "2026-07-21T16:52:03.687829Z",
     "completed_at": "2026-07-21T16:52:03.690398Z",
     "target": "checkout-availability",

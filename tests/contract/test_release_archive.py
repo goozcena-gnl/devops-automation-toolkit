@@ -14,8 +14,8 @@ def test_source_archive_uses_canonical_git_modes(
 
     assert build_release.main() == 0
 
-    archive = tmp_path / "devops-automation-toolkit-1.0.0.zip"
-    prefix = "devops-automation-toolkit-1.0.0"
+    archive = tmp_path / "devops-automation-toolkit-1.0.1.zip"
+    prefix = "devops-automation-toolkit-1.0.1"
     with zipfile.ZipFile(archive) as bundle:
         assert _permissions(bundle, f"{prefix}/README.md") == 0o644
         assert _permissions(bundle, f"{prefix}/scripts/linux/linux-triage.sh") == 0o755
