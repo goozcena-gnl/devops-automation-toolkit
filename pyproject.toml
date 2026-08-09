@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "devops-automation-toolkit"
 version = "1.0.0"
-description = "Production-oriented foundation for deterministic DevOps automation utilities"
+description = "Read-only-first Python CLI for deterministic, redacted DevOps automation reports"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

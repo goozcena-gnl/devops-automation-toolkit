@@ -69,7 +69,7 @@ from devops_toolkit.version import __version__
 
 app = typer.Typer(
     name="devops-toolkit",
-    help="Shared foundation for production-oriented DevOps automation utilities.",
+    help="Read-only-first Python CLI for deterministic, redacted DevOps automation reports.",
     no_args_is_help=True,
 )
 console = Console()

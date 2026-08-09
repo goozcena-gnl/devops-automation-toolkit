@@ -1,10 +1,13 @@
 # DevOps Automation Toolkit
 
-A deterministic, report-first toolkit for Cloud, DevOps, SRE, DevSecOps, Kubernetes, infrastructure as code, CI/CD, observability, and FinOps workflows.
+> An installable Python CLI that converts cloud and platform evidence into deterministic, redacted JSON, Markdown, and SARIF reports across 20 read-only-first tools.
 
-Version **1.0.0** provides the complete ranked set of 20 tools: 18 Python commands exposed through one installable CLI, one native Bash incident collector, and one native PowerShell workstation auditor.
+Version 1.0.0 is locally validated and tagged; GitHub-hosted CI/security gates pass, but live providers and the native PowerShell collector require target-environment validation. No GitHub Release has been published.
 
-**Project status:** release candidate. Local deterministic gates pass; public release remains draft until the GitHub-hosted Linux, Windows, PowerShell, ShellCheck, actionlint, Gitleaks, and dependency-audit jobs pass for the release commit.
+[![CI](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/ci.yml)
+[![Security](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/security.yml)
+[![Tag](https://img.shields.io/github/v/tag/goozcena-gnl/devops-automation-toolkit?display_name=tag&sort=semver)](https://github.com/goozcena-gnl/devops-automation-toolkit/tags)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ## Design principles
 
