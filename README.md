@@ -9,6 +9,12 @@ Version 1.0.0 is locally validated and tagged; GitHub-hosted CI/security gates p
 [![Tag](https://img.shields.io/github/v/tag/goozcena-gnl/devops-automation-toolkit?display_name=tag&sort=semver)](https://github.com/goozcena-gnl/devops-automation-toolkit/tags)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+<p align="center">
+  <img src="docs/assets/portfolio/report-formats-evidence.svg" alt="Fixture-backed DevOps Toolkit CLI evidence flowing into consistent JSON, Markdown, and SARIF reports" width="100%" />
+</p>
+
+<p align="center"><sub><strong>Fixture-backed report evidence.</strong> The values shown are rendered from the checked-in synthetic <code>examples/reports/sample-report.*</code> contracts—no live cloud, customer, cluster, or credential data.</sub></p>
+
 ## Design principles
 
 - Read-only or report-only behavior by default.
