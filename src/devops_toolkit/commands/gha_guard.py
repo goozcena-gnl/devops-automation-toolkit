@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +39,10 @@ for first_character, resolvers in list(WorkflowLoader.yaml_implicit_resolvers.it
     WorkflowLoader.yaml_implicit_resolvers[first_character] = [
         resolver for resolver in resolvers if resolver[0] != "tag:yaml.org,2002:bool"
     ]
-WorkflowLoader.add_implicit_resolver(  # type: ignore[no-untyped-call]
+_add_implicit_resolver: Callable[[str, re.Pattern[str], list[str]], None] = (
+    WorkflowLoader.add_implicit_resolver
+)
+_add_implicit_resolver(
     "tag:yaml.org,2002:bool",
     re.compile(r"^(?:true|false|True|False|TRUE|FALSE)$"),
     list("tTfF"),
@@ -180,7 +184,8 @@ def analyze_workflow(workflow: Path, root: Path) -> tuple[list[Finding], dict[st
         )
         return [finding], {"jobs": 0, "steps": 0}
     finally:
-        loader.dispose()  # type: ignore[no-untyped-call]
+        dispose: Callable[[], None] = loader.dispose
+        dispose()
     if not isinstance(loaded, dict):
         return [
             _finding(
