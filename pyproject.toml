@@ -40,7 +40,7 @@ dev = [
   "types-PyYAML>=6.0,<7",
   "types-jsonschema>=4.23,<5",
   "pip-audit>=2.9,<3",
-  "twine>=6,<7",
+  "twine>=6,<8",
 ]
 
 [project.scripts]
