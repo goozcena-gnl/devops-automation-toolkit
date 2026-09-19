@@ -33,7 +33,8 @@ jobs:
           version: v0.5.2
           verify-attestation: true
           config-file: .plumber.yaml
-          soft-fail: true
+          soft-fail: false
+          min-points: 100
           score-push: false
           upload-sarif: true
           upload-artifacts: true
