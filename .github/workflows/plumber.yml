@@ -1,0 +1,40 @@
+name: Plumber CI/CD Security
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: plumber-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plumber:
+    name: Plumber audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Analyze GitHub Actions security
+        uses: getplumber/plumber@d37150cee04d6627497cb4c6a553ef9a2d6c7548 # v0.5.2
+        with:
+          version: v0.5.2
+          verify-attestation: true
+          config-file: .plumber.yaml
+          soft-fail: true
+          score-push: false
+          upload-sarif: true
+          upload-artifacts: true
+          artifact-name: plumber-security-reports
