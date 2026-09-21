@@ -1,7 +1,15 @@
-.PHONY: install-dev format lint typecheck test test-unit test-integration security dependency-audit self-audit native-validate docs-check contracts validate build catalog clean
+.PHONY: install-dev lock lock-check format lint typecheck test test-unit test-integration security dependency-audit self-audit native-validate docs-check contracts validate build catalog clean
+
+PIP_CONSTRAINT ?= $(abspath requirements/dev-constraints.txt)
 
 install-dev:
-	python -m pip install -e '.[dev]'
+	PIP_CONSTRAINT="$(PIP_CONSTRAINT)" python -m pip install -e '.[dev]'
+
+lock:
+	PIP_CONSTRAINT= python -m piptools compile --all-build-deps --extra dev --output-file requirements/dev-constraints.txt pyproject.toml
+
+lock-check:
+	PIP_CONSTRAINT= python -m piptools compile --quiet --dry-run --all-build-deps --extra dev --output-file requirements/dev-constraints.txt pyproject.toml
 
 format:
 	ruff format .
@@ -51,7 +59,7 @@ contracts:
 	python tools/validate_examples.py
 	python tools/validate_reports.py
 
-validate: lint typecheck test security contracts native-validate docs-check self-audit
+validate: lock-check lint typecheck test security contracts native-validate docs-check self-audit
 
 build:
 	python -m build

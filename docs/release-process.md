@@ -5,6 +5,7 @@
 - The version in `pyproject.toml` and `src/devops_toolkit/version.py` matches.
 - `CHANGELOG.md` contains a dated entry for the release.
 - The generated catalog is current.
+- `requirements/dev-constraints.txt` matches `pyproject.toml`.
 - Configuration examples, JSON schemas, reports, and documentation links validate.
 - Unit/contract and isolated integration tests pass.
 - Ruff, mypy, Bandit, native syntax checks, and repository self-audits pass.
@@ -16,7 +17,9 @@
 ## Local release candidate
 
 ```bash
+export PIP_CONSTRAINT="$PWD/requirements/dev-constraints.txt"
 python -m pip install -e '.[dev]'
+make lock-check
 make validate
 make build
 python -m twine check dist/*
@@ -48,6 +51,12 @@ The release must remain a draft until the release-commit checks pass. Do not cre
 The annotated `v1.0.0` tag and its unpublished GitHub draft are immutable historical release records that predate the corrected portfolio wording. Do not edit, publish, retag, recreate, or attach assets to that draft. Version 1.0.1 is the first publishable successor.
 
 The workflow does not publish to PyPI by default. PyPI publication should be introduced separately with trusted publishing and an explicit protected environment.
+
+## Maintaining the locked internal toolchain
+
+The package continues to publish compatible dependency ranges for library consumers. Reproducible CI, development, and release validation instead use `requirements/dev-constraints.txt` as an internal lock applied through `PIP_CONSTRAINT`.
+
+When dependency ranges change, regenerate the lock with `make lock`, review the diff, and commit the updated `requirements/dev-constraints.txt` alongside the manifest change. `make lock-check` and the Python workflows enforce that the committed lock remains in sync.
 
 ## Post-release
 

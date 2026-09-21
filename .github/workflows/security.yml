@@ -32,6 +32,8 @@ jobs:
   python-security:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/requirements/dev-constraints.txt
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,7 +43,10 @@ jobs:
         with:
           python-version: '3.13'
           cache: pip
-      - run: python -m pip install -e ".[dev]" pip-audit
+          cache-dependency-path: requirements/dev-constraints.txt
+      - run: python -m pip install -e ".[dev]"
+      - name: Verify locked dependency graph
+        run: python -m piptools compile --quiet --dry-run --all-build-deps --extra dev --output-file requirements/dev-constraints.txt pyproject.toml
       - name: Bandit
         run: bandit -q -c pyproject.toml -r src
       - name: Dependency audit
@@ -69,6 +74,8 @@ jobs:
   configuration-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/requirements/dev-constraints.txt
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -76,5 +83,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements/dev-constraints.txt
       - run: python -m pip install jsonschema PyYAML
       - run: python tools/validate_examples.py

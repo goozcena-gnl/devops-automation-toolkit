@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - 'pyproject.toml'
+      - 'requirements/dev-constraints.txt'
       - 'scripts/**'
       - 'src/devops_toolkit/adapters/**'
       - 'src/devops_toolkit/commands/**'
@@ -21,6 +23,8 @@ jobs:
   local-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      PIP_CONSTRAINT: ${{ github.workspace }}/requirements/dev-constraints.txt
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,7 +32,10 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements/dev-constraints.txt
       - run: python -m pip install -e ".[dev]"
+      - run: python -m piptools compile --quiet --dry-run --all-build-deps --extra dev --output-file requirements/dev-constraints.txt pyproject.toml
       - run: pytest -m integration --no-cov
       - run: scripts/linux/linux-triage.sh --timeout 2 --output reports/linux.json --bundle reports/linux-support.zip
       - run: python tools/validate_reports.py

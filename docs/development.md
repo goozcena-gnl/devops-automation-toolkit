@@ -3,8 +3,23 @@
 Install the package in editable mode with development dependencies:
 
 ```bash
+export PIP_CONSTRAINT="$PWD/requirements/dev-constraints.txt"
 python -m pip install -e '.[dev]'
 make validate
+```
+
+In Windows PowerShell, set `$env:PIP_CONSTRAINT = (Resolve-Path 'requirements/dev-constraints.txt')` before installing.
+
+Regenerate the checked-in CI/dev/release constraints lock with:
+
+```bash
+make lock
+```
+
+Verify that `pyproject.toml` and `requirements/dev-constraints.txt` still resolve to the committed locked environment with:
+
+```bash
+make lock-check
 ```
 
 ## Adding a finding rule
