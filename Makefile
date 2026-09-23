@@ -6,10 +6,10 @@ install-dev:
 	PIP_CONSTRAINT="$(PIP_CONSTRAINT)" python -m pip install -e '.[dev]'
 
 lock:
-	PIP_CONSTRAINT= python -m piptools compile --all-build-deps --extra dev --output-file requirements/dev-constraints.txt pyproject.toml
+	python tools/check_dev_constraints.py generate
 
 lock-check:
-	PIP_CONSTRAINT= python -m piptools compile --quiet --dry-run --all-build-deps --extra dev --output-file requirements/dev-constraints.txt pyproject.toml
+	python tools/check_dev_constraints.py check
 
 format:
 	ruff format .

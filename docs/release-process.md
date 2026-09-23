@@ -56,7 +56,7 @@ The workflow does not publish to PyPI by default. PyPI publication should be int
 
 The package continues to publish compatible dependency ranges for library consumers. Reproducible CI, development, and release validation instead use `requirements/dev-constraints.txt` as an internal lock applied through `PIP_CONSTRAINT`.
 
-When dependency ranges change, regenerate the lock with `make lock`, review the diff, and commit the updated `requirements/dev-constraints.txt` alongside the manifest change. `make lock-check` and the Python workflows enforce that the committed lock remains in sync.
+When dependency ranges change, regenerate the universal lock with `make lock`, review the diff, and commit the updated `requirements/dev-constraints.txt` alongside the manifest change. `make lock-check` and the Python workflows use `tools/check_dev_constraints.py check` to compare a fresh resolution with the committed lock without changing it.
 
 ## Post-release
 

@@ -35,7 +35,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements/dev-constraints.txt
       - run: python -m pip install -e ".[dev]"
-      - run: python -m piptools compile --quiet --dry-run --all-build-deps --extra dev --output-file requirements/dev-constraints.txt pyproject.toml
+      - run: python tools/check_dev_constraints.py check
       - run: pytest -m integration --no-cov
       - run: scripts/linux/linux-triage.sh --timeout 2 --output reports/linux.json --bundle reports/linux-support.zip
       - run: python tools/validate_reports.py

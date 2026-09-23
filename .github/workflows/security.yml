@@ -46,7 +46,7 @@ jobs:
           cache-dependency-path: requirements/dev-constraints.txt
       - run: python -m pip install -e ".[dev]"
       - name: Verify locked dependency graph
-        run: python -m piptools compile --quiet --dry-run --all-build-deps --extra dev --output-file requirements/dev-constraints.txt pyproject.toml
+        run: python tools/check_dev_constraints.py check
       - name: Bandit
         run: bandit -q -c pyproject.toml -r src
       - name: Dependency audit

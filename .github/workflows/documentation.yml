@@ -26,8 +26,8 @@ jobs:
           python-version: '3.13'
           cache: pip
           cache-dependency-path: requirements/dev-constraints.txt
-      - run: python -m pip install -e .
-      - run: python -m piptools compile --quiet --dry-run --all-build-deps --extra dev --output-file requirements/dev-constraints.txt pyproject.toml
+      - run: python -m pip install -e ".[dev]"
+      - run: python tools/check_dev_constraints.py check
       - run: python tools/check_docs.py
       - run: python tools/generate_catalog.py
       - name: Ensure generated catalog is committed
