@@ -79,5 +79,5 @@ types-pyyaml==6.0.12.20260906
 typing-extensions==4.16.0
 typing-inspection==0.4.4
 urllib3==2.8.0
-uv==0.11.14
+uv==0.11.15
 zipp==4.1.0 ; python_full_version < '3.12' and platform_machine != 'ppc64le' and platform_machine != 's390x'
