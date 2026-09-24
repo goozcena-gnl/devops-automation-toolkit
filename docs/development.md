@@ -3,9 +3,34 @@
 Install the package in editable mode with development dependencies:
 
 ```bash
+export PIP_CONSTRAINT="$PWD/requirements/dev-constraints.txt"
 python -m pip install -e '.[dev]'
 make validate
 ```
+
+In Windows PowerShell, set `$env:PIP_CONSTRAINT = (Resolve-Path 'requirements/dev-constraints.txt')` before installing.
+
+Regenerate the checked-in CI/dev/release constraints lock with:
+
+```bash
+make lock
+```
+
+This calls `tools/check_dev_constraints.py generate`, which uses the pinned `uv`
+resolver to produce a universal lock anchored at Python 3.11. Python- and
+platform-specific dependencies retain their environment markers, so the same file
+covers Python 3.11, 3.12, and 3.13 on Linux and Windows. After changing the
+dependency ranges or resolver version, review and commit the generated lock.
+
+Verify that `pyproject.toml` and `requirements/dev-constraints.txt` still resolve to the committed locked environment with:
+
+```bash
+make lock-check
+```
+
+The check resolves into a temporary file and compares every pinned requirement
+against the committed lock. It does not write tracked files. On Windows, use
+`python tools/check_dev_constraints.py generate` or `python tools/check_dev_constraints.py check`.
 
 ## Adding a finding rule
 

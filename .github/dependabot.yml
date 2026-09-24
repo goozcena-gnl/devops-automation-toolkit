@@ -7,7 +7,7 @@ updates:
     open-pull-requests-limit: 5
     groups:
       python-quality:
-        patterns: ["ruff", "mypy", "pytest*", "bandit*"]
+        patterns: ["bandit*", "build", "mypy", "pip-audit", "pytest*", "ruff", "twine", "types-*", "uv"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
