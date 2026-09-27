@@ -109,7 +109,7 @@ The clean development environment resolved compatible versions and `pip check` r
 
 `pip-audit` was installed and invoked twice, but the local container could not resolve `pypi.org`; therefore no local vulnerability result is claimed. The scheduled and pull-request security workflow retains `pip-audit --progress-spinner off` and must pass in a network-enabled GitHub runner before publication.
 
-The project intentionally avoids a runtime lock file because it is distributed as a Python library with compatible dependency ranges. Release artifacts and CI environments remain reproducible through bounded project constraints, immutable action pins, package checks, and checksums rather than by forcing application-style transitive pins on consumers.
+The package still publishes compatible dependency ranges for consumers. Reproducible CI, development, and release validation now come from the checked-in `requirements/dev-constraints.txt` lock applied through `PIP_CONSTRAINT`, so transitive pins remain internal and do not tighten the library's public runtime contract.
 
 ## GitHub Actions review
 

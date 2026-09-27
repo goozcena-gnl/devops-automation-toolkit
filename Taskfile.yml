@@ -3,7 +3,13 @@ version: '3'
 tasks:
   install-dev:
     cmds:
-      - python -m pip install -e '.[dev]'
+      - PIP_CONSTRAINT='{{.TASKFILE_DIR}}/requirements/dev-constraints.txt' python -m pip install -e '.[dev]'
+  lock:
+    cmds:
+      - python tools/check_dev_constraints.py generate
+  lock-check:
+    cmds:
+      - python tools/check_dev_constraints.py check
   format:
     cmds:
       - ruff format .
@@ -46,7 +52,7 @@ tasks:
       - python tools/check_docs.py
       - python tools/generate_catalog.py
   validate:
-    deps: [lint, typecheck, test, security, contracts, native-validate, docs-check, self-audit]
+    deps: [lock-check, lint, typecheck, test, security, contracts, native-validate, docs-check, self-audit]
   build:
     cmds:
       - python -m build
