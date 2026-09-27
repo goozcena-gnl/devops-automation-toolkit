@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import difflib
 import itertools
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -25,11 +27,35 @@ def normalized_lines(contents: str) -> list[str]:
     return [line.rstrip() for line in contents.splitlines() if line.strip()]
 
 
-def resolve(project: Path, resolver: Sequence[str] | None = None) -> str:
-    """Resolve into a fresh temporary file, independent of committed pins."""
+def resolution_pins(contents: str) -> str:
+    """Keep locked versions while letting the manifest determine package markers.
+
+    A marked constraint can change uv's universal marker partitions even when the
+    locked graph is identical. Preserve markers when a package has multiple pins.
+    """
+    lines = normalized_lines(contents)
+    names = [re.sub(r"[-_.]+", "-", line.partition("==")[0]).lower() for line in lines]
+    counts = Counter(names)
+    return (
+        "\n".join(
+            line.partition(" ; ")[0] if counts[name] == 1 else line
+            for line, name in zip(lines, names, strict=True)
+        )
+        + "\n"
+    )
+
+
+def resolve(
+    project: Path,
+    resolver: Sequence[str] | None = None,
+    *,
+    constraints: Path | None = None,
+) -> str:
+    """Resolve into a temporary file, optionally constrained by committed pins."""
     command = list(resolver) if resolver is not None else [shutil.which("uv") or "uv"]
     with tempfile.TemporaryDirectory(prefix="dev-constraints-") as temp_dir:
         output = Path(temp_dir) / "expected.txt"
+        pins = Path(temp_dir) / "pins.txt"
         args = [
             *command,
             "pip",
@@ -45,6 +71,12 @@ def resolve(project: Path, resolver: Sequence[str] | None = None) -> str:
             str(output),
             str(project),
         ]
+        if constraints is not None:
+            pins.write_text(
+                resolution_pins(constraints.read_text(encoding="utf-8")),
+                encoding="utf-8",
+            )
+            args.extend(["--constraint", str(pins)])
         try:
             result = subprocess.run(  # noqa: S603
                 args,
@@ -70,8 +102,8 @@ def run(
     constraints: Path = CONSTRAINTS,
     resolver: Sequence[str] | None = None,
 ) -> int:
-    expected = resolve(project, resolver)
     if operation == "generate":
+        expected = resolve(project, resolver)
         constraints.parent.mkdir(parents=True, exist_ok=True)
         constraints.write_text(
             "\n".join(normalized_lines(expected)) + "\n", encoding="utf-8", newline="\n"
@@ -84,6 +116,7 @@ def run(
         print(f"Missing constraints: {constraints}", file=sys.stderr)
         return 1
     actual_lines = normalized_lines(constraints.read_text(encoding="utf-8"))
+    expected = resolve(project, resolver, constraints=constraints)
     expected_lines = normalized_lines(expected)
     if actual_lines == expected_lines:
         print("Development constraints match the resolved dependency graph")
@@ -93,7 +126,7 @@ def run(
         actual_lines,
         expected_lines,
         fromfile=str(constraints),
-        tofile="fresh resolution",
+        tofile="constrained resolution",
         lineterm="",
     )
     for line in itertools.islice(diff, 40):
