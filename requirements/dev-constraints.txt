@@ -64,7 +64,7 @@ requests-toolbelt==1.0.0
 rfc3986==2.0.0
 rich==15.0.0
 rpds-py==2026.6.3
-ruff==0.16.8
+ruff==0.16.9
 secretstorage==3.5.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x' and sys_platform == 'linux'
 setuptools==84.0.0
 shellingham==1.5.4
@@ -79,5 +79,5 @@ types-pyyaml==6.0.12.20260906
 typing-extensions==4.16.0
 typing-inspection==0.4.4
 urllib3==2.8.0
-uv==0.11.15
+uv==0.12.19
 zipp==4.1.0 ; python_full_version < '3.12' and platform_machine != 'ppc64le' and platform_machine != 's390x'
