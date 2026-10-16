@@ -41,7 +41,7 @@ uv tool install .
 devops-toolkit version
 ```
 
-For development, use `uv venv` and then `uv pip install -e '.[dev]'`.
+For a reproducible development environment, export `PIP_CONSTRAINT=$PWD/requirements/dev-constraints.txt`, then use `uv venv` and `uv pip install -e '.[dev]'`.
 
 ### With `pipx`
 
@@ -56,6 +56,7 @@ devops-toolkit health
 python -m venv .venv
 source .venv/bin/activate          # Linux/macOS
 # .venv\Scripts\Activate.ps1      # Windows PowerShell
+export PIP_CONSTRAINT="$PWD/requirements/dev-constraints.txt"
 python -m pip install -e '.[dev]'
 devops-toolkit version
 ```
@@ -187,6 +188,7 @@ Python analyzers support console, JSON, Markdown, and SARIF where the format is 
 make validate
 make build
 python tools/check_docs.py
+make lock-check
 ```
 
 `make validate` runs formatting and lint checks, strict type checking, unit and contract tests with coverage, isolated subprocess-heavy integration tests without inherited coverage, Bandit, configuration and report contracts, native syntax checks, documentation checks, and repository self-audits.
