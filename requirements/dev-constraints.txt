@@ -28,7 +28,7 @@ jeepney==0.9.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x' a
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 keyring==25.7.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
-librt==0.15.0 ; platform_python_implementation != 'PyPy'
+librt==0.16.0 ; platform_python_implementation != 'PyPy'
 license-expression==30.4.4
 markdown-it-py==4.2.0
 mdurl==0.1.2
