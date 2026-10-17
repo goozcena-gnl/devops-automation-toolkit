@@ -34,7 +34,7 @@ dev = [
   "bandit[toml]>=1.8,<2",
   "build>=1.2,<2",
   "mypy>=1.15,<3",
-  "uv==0.13.0",
+  "uv==0.13.1",
   "setuptools>=77,<85",
   "pytest>=8.3,<10",
   "pytest-cov>=6,<8",
