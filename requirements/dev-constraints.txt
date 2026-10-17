@@ -33,7 +33,7 @@ license-expression==30.4.4
 markdown-it-py==4.2.0
 mdurl==0.1.2
 more-itertools==11.1.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
-msgpack==1.2.2
+msgpack==1.2.3
 mypy==2.4.0
 mypy-extensions==1.1.0
 nh3==0.3.7
