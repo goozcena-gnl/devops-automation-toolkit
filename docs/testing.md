@@ -41,3 +41,24 @@ Tests use invalid synthetic credentials only. No long-lived cloud or cluster
 credentials are required.
 
 On Windows, the fake `kubectl`, module-entrypoint, and Git-history integration paths run natively. The Bash collector test is explicitly skipped and remains mandatory on the hosted Ubuntu integration job; a platform skip is not reported as a pass.
+
+## Locked dependency updates
+
+Development and CI installs use `requirements/dev-constraints.txt` through
+`PIP_CONSTRAINT`. Keep exact pins and platform markers when updating dependencies.
+Dependabot groups mypy with its `librt` and `ast-serialize` runtime dependencies,
+and Pydantic with `pydantic-core`, whose version must match Pydantic's metadata.
+Grouping reduces split updates; it does not guarantee that every transitive pin
+will be refreshed or that the resulting graph is installable.
+
+After an update, install with the committed constraints and run
+`python tools/check_dev_constraints.py check` using the pinned uv version. If a
+new requirement conflicts with another pin, inspect the package metadata and
+update only the affected dependency closure. Do not remove constraints or
+regenerate unrelated pins to make installation pass. The offline integration
+tests cover incompatible direct/transitive pins and preservation of compatible
+pins after upstream releases.
+
+Require the Ubuntu and Windows Python 3.11–3.13 matrix, integration and security
+checks on the final PR HEAD. After combining dependency PRs, validate the combined
+graph again; individually passing checks do not establish combined compatibility.
