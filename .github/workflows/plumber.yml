@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 concurrency:
   group: plumber-${{ github.workflow }}-${{ github.ref }}
@@ -17,6 +16,10 @@ concurrency:
 
 jobs:
   plumber:
+    # Required only by this job to upload the Plumber SARIF report.
+    permissions:
+      contents: read
+      security-events: write
     name: Plumber audit
     runs-on: ubuntu-24.04
     timeout-minutes: 15
