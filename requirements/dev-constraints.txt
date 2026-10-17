@@ -11,7 +11,7 @@ certifi==2026.7.22
 cffi==2.1.1 ; platform_machine != 'ppc64le' and platform_machine != 's390x' and platform_python_implementation != 'PyPy' and sys_platform == 'linux'
 charset-normalizer==3.5.1
 colorama==0.4.6 ; os_name == 'nt' or sys_platform == 'win32'
-coverage==7.16.1
+coverage==7.16.2
 cryptography==50.0.2 ; platform_machine != 'ppc64le' and platform_machine != 's390x' and sys_platform == 'linux'
 cyclonedx-python-lib==11.12.0
 defusedxml==0.7.1
