@@ -14,13 +14,18 @@ runner = CliRunner()
 @pytest.mark.parametrize(
     "command", [tool.identifier for tool in TOOLS if tool.language == "Python"]
 )
-def test_python_tool_help(command: str) -> None:
-    result = runner.invoke(app, [command, "--help"])
+@pytest.mark.parametrize("color", [False, True], ids=["plain", "color"])
+def test_python_tool_help(command: str, color: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+    from typer import rich_utils
+
+    monkeypatch.setattr(rich_utils, "FORCE_TERMINAL", color)
+    result = runner.invoke(app, [command, "--help"], color=color)
+    output = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
 
     assert result.exit_code == 0
-    assert command in result.stdout
-    assert "--help" in result.stdout
-    assert "--format" in result.stdout
+    assert command in output
+    assert "--help" in output
+    assert "--format" in output
 
 
 @pytest.mark.parametrize("prefix", ["", "--"], ids=["extra-argument", "unknown-option"])
