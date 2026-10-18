@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 concurrency:
   group: plumber-${{ github.workflow }}-${{ github.ref }}
@@ -17,6 +16,10 @@ concurrency:
 
 jobs:
   plumber:
+    # Required only by this job to upload the Plumber SARIF report.
+    permissions:
+      contents: read
+      security-events: write
     name: Plumber audit
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -28,9 +31,9 @@ jobs:
           persist-credentials: false
 
       - name: Analyze GitHub Actions security
-        uses: getplumber/plumber@d37150cee04d6627497cb4c6a553ef9a2d6c7548 # v0.5.2
+        uses: getplumber/plumber@bdac4bb86e112220f05aaaa52264b9a25e21a9f5 # v0.6.3
         with:
-          version: v0.5.2
+          version: v0.6.3
           verify-attestation: true
           config-file: .plumber.yaml
           soft-fail: false

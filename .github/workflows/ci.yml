@@ -46,7 +46,7 @@ jobs:
         run: pytest tests/unit tests/contract --cov-report=xml
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage
           path: coverage.xml
@@ -74,6 +74,16 @@ jobs:
       - name: actionlint
         # v1.7.12 release tag resolves to 914e7df21a07ef503a81201c76d2b11c789d3fca.
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Install Plumber alignment checker dependency
+        run: python -m pip install --constraint requirements/dev-constraints.txt "PyYAML>=6,<7"
+      - name: Verify Plumber action and binary alignment
+        timeout-minutes: 2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python tools/check_plumber_alignment.py .github/workflows/plumber.yml
 
   powershell-static:
     runs-on: windows-latest
@@ -130,7 +140,7 @@ jobs:
           python scripts/workstation/validate_workstation_report.py
       - name: Upload Workstation Doctor smoke report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: workstation-doctor-windows-smoke
           path: workstation-report.json
