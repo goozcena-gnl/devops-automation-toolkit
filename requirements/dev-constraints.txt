@@ -7,7 +7,7 @@ bandit==1.9.4
 boolean-py==5.0
 build==1.6.1
 cachecontrol==0.14.4
-certifi==2026.7.22
+certifi==2026.10.19
 cffi==2.1.1 ; platform_machine != 'ppc64le' and platform_machine != 's390x' and platform_python_implementation != 'PyPy' and sys_platform == 'linux'
 charset-normalizer==3.5.1
 colorama==0.4.6 ; os_name == 'nt' or sys_platform == 'win32'
