@@ -47,7 +47,7 @@ pip-requirements-parser==32.0.1
 platformdirs==4.13.0
 pluggy==1.6.0
 py-serializable==2.1.0
-pycparser==3.0 ; implementation_name != 'PyPy' and platform_machine != 'ppc64le' and platform_machine != 's390x' and platform_python_implementation != 'PyPy' and sys_platform == 'linux'
+pycparser==3.11 ; implementation_name != 'PyPy' and platform_machine != 'ppc64le' and platform_machine != 's390x' and platform_python_implementation != 'PyPy' and sys_platform == 'linux'
 pydantic==2.14.1
 pydantic-core==2.50.1
 pygments==2.21.0
