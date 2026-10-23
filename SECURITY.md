@@ -58,3 +58,34 @@ The repository actions are pinned to immutable commit SHAs. A new action SHA mus
 ## Scope and assurance
 
 Version 1.0.0 establishes the stable CLI and report contracts for the full 20-tool set. Deterministic fixture coverage, local integration checks, package installation, and static analysis do not prove compatibility with every provider version, operating system, Kubernetes distribution, or enterprise policy.
+
+## Release finding decisions
+
+This exception process applies only to GitHub Actions Guard's release gate,
+for GHA-PERMISSION-WRITE on security-events: write in the Plumber job needed for
+SARIF upload. Other findings and release gates remain unchanged; broader
+eligibility requires a separate governance decision.
+
+Zero findings remains the default release criterion. This governance classification
+does not change scanner findings, report statuses, exit codes, thresholds, or CI
+requirements:
+
+- PASS: the relevant report contains zero findings and the required evidence is complete.
+- WAIVED: findings remain visible, and every finding is covered by a formally
+  approved, unexpired exception matching its exact fingerprint, repository,
+  immutable commit SHA, workflow/job/resource scope, and intended release.
+- FAIL: any finding lacks such an exception, any exception is invalid or expired,
+  or required evidence is incomplete. An exception for a finding does not cover
+  partial or missing evidence unless separately and explicitly qualified.
+
+Each exception record must identify the finding and evidence digest, justification,
+compensating controls, residual risk, accountable owner, human approver and durable
+approval evidence, approval time, review date, UTC expiration, and revocation
+conditions. A proposal, agent-generated record, passing CI, or approval of this
+policy is not risk acceptance. Missing or mismatched fields fail closed.
+
+Any change to the approved SHA or scope requires a new human decision. Revoke an
+exception on expiration, loss of a compensating control, relevant security incident,
+or an unreviewed change to the action, binary, permissions, events, or finding.
+No exception may authorize weakened scanners, suppressed findings, bypassed branch
+protections, or release publication. Release authorization remains separate.
