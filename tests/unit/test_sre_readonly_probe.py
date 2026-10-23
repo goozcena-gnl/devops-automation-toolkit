@@ -208,22 +208,14 @@ class PosixBoundaryTests(unittest.TestCase):
             probe.selectors, "DefaultSelector", return_value=self.selector
         )
         self.popen_patch = patch.object(probe.subprocess, "Popen", return_value=self.process)
-        self.nonblock_patch = patch.object(probe.os, "set_blocking")
+        self.nonblock_patch = patch.object(probe.os, "set_blocking", create=True)
         self.kill_patch = patch.object(probe.os, "killpg", create=True)
         self.signal_patch = patch.object(probe.signal, "SIGKILL", 9, create=True)
-        self.signal_patch.start()
-        self.selector_patch.start()
-        self.popen = self.popen_patch.start()
-        self.nonblock_patch.start()
-        self.kill = self.kill_patch.start()
-        for local_patch in (
-            self.signal_patch,
-            self.selector_patch,
-            self.popen_patch,
-            self.nonblock_patch,
-            self.kill_patch,
-        ):
-            self.addCleanup(local_patch.stop)
+        self.enterContext(self.signal_patch)
+        self.enterContext(self.selector_patch)
+        self.popen = self.enterContext(self.popen_patch)
+        self.enterContext(self.nonblock_patch)
+        self.kill = self.enterContext(self.kill_patch)
 
     def test_private_group_clean_environment_and_no_shell(self):
         session = probe.PosixSession(probe.COMMANDS["unit_show"])
@@ -279,6 +271,56 @@ class PosixBoundaryTests(unittest.TestCase):
             session.read(0.05, 5)
         self.selector.unregister.assert_called_once_with(key.fileobj)
         session.finish()
+
+
+class PatchIsolationTests(unittest.TestCase):
+    def test_absent_set_blocking_is_mocked_then_removed(self):
+        original_popen = probe.subprocess.Popen
+        original_selector = probe.selectors.DefaultSelector
+        with patch.dict(probe.os.__dict__):
+            probe.os.__dict__.pop("set_blocking", None)
+            case = PosixBoundaryTests("test_read_is_bounded")
+            result = unittest.TestResult()
+            case.run(result)
+            self.assertEqual(result.testsRun, 1)
+            self.assertTrue(result.wasSuccessful(), result.errors + result.failures)
+            self.assertFalse(hasattr(probe.os, "set_blocking"))
+            self.assertIs(probe.subprocess.Popen, original_popen)
+            self.assertIs(probe.selectors.DefaultSelector, original_selector)
+
+    def test_setup_failure_restores_every_started_patch(self):
+        missing = object()
+        targets = (
+            (probe.signal, "SIGKILL"),
+            (probe.selectors, "DefaultSelector"),
+            (probe.subprocess, "Popen"),
+            (probe.os, "set_blocking"),
+            (probe.os, "killpg"),
+        )
+        for fail_after in range(1, len(targets) + 1):
+            with self.subTest(fail_after=fail_after):
+                originals = [getattr(obj, name, missing) for obj, name in targets]
+                case = PosixBoundaryTests("test_read_is_bounded")
+                enter_context = case.enterContext
+                calls = 0
+
+                def enter_then_fail(context, *, _enter=enter_context, _fail=fail_after):
+                    nonlocal calls
+                    value = _enter(context)
+                    calls += 1
+                    if calls == _fail:
+                        raise RuntimeError("SYNTHETIC_SETUP_FAILURE")
+                    return value
+
+                result = unittest.TestResult()
+                with patch.object(case, "enterContext", side_effect=enter_then_fail):
+                    case.run(result)
+                self.assertEqual(calls, fail_after)
+                self.assertEqual(len(result.errors), 1)
+                self.assertIn("SYNTHETIC_SETUP_FAILURE", result.errors[0][1])
+                self.assertEqual(result.failures, [])
+                for (obj, name), original in zip(targets, originals, strict=True):
+                    self.assertIs(getattr(obj, name, missing), original)
 
 
 class SummaryTests(unittest.TestCase):
