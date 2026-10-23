@@ -18,7 +18,7 @@
 - [ ] Bandit passes.
 - [ ] Dependency audit passes in a network-enabled CI environment.
 - [ ] Secret Sentinel reports zero source/native-script findings.
-- [ ] GitHub Actions Guard reports zero workflow findings.
+- [ ] GitHub Actions Guard gate is PASS (zero findings) or WAIVED under the documented, explicitly approved exception process in SECURITY.md; every uncovered finding is FAIL.
 - [ ] Bash syntax and ShellCheck pass.
 - [ ] PowerShell parser and PSScriptAnalyzer pass in Windows CI.
 
