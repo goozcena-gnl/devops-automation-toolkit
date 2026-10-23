@@ -1,0 +1,71 @@
+name: One authorized SRE Ubuntu experiment
+
+# Opening this PR is execution, even when draft. Separate human approval required.
+on:
+  pull_request:
+    types: [opened]
+    branches: [main]
+    paths:
+      - '.github/workflows/sre-diagnostic.yml'
+      - 'tools/sre_readonly_probe.py'
+      - 'tests/unit/test_sre_readonly_probe.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: one-sre-ubuntu-experiment
+  cancel-in-progress: false
+
+jobs:
+  diagnostic:
+    if: >-
+      github.event.action == 'opened' &&
+      github.event.pull_request.draft == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.repository == 'goozcena-gnl/devops-automation-toolkit' &&
+      github.head_ref == 'codex/sre-ubuntu-diagnostic' &&
+      github.event.pull_request.base.sha == '93cfc5a6c8c23135376e223fb7b5d43cee0f8d0b' &&
+      github.actor == 'goozcena-gnl' &&
+      github.run_attempt == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout reviewed PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Offline harness tests
+        id: selftest
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+          TMPDIR: ${{ github.workspace }}
+        run: python3 tests/unit/test_sre_readonly_probe.py
+      - name: Collect fixed read-only evidence
+        id: collect
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 tools/sre_readonly_probe.py --collect
+      - name: Validate sanitized artifacts after incomplete collection
+        id: validate
+        if: ${{ !cancelled() && steps.selftest.outcome == 'success' && steps.collect.outcome == 'failure' }}
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 tools/sre_readonly_probe.py --validate-artifacts
+      - name: Upload only validated evidence
+        if: ${{ !cancelled() && steps.validate.outcome == 'success' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sre-ubuntu-sanitized
+          path: |
+            sre-diagnostic-output/sre-result.json
+            sre-diagnostic-output/run-provenance.json
+            sre-diagnostic-output/SHA256SUMS
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 3
+          overwrite: false
