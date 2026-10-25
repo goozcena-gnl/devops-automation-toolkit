@@ -28,7 +28,7 @@ from devops_toolkit.core.models import (
     Severity,
     utc_now,
 )
-from devops_toolkit.core.redaction import Redactor
+from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive
 from devops_toolkit.core.subprocess import executable_path, run_command
 from devops_toolkit.policies.engine import status_for_findings
 from devops_toolkit.reporters.json_report import render_json
@@ -214,7 +214,26 @@ def _collect_log_files(root: Path, *, max_file_bytes: int, max_total_bytes: int)
         relative = path.relative_to(root).as_posix()
         collected[relative] = redactor.redact(text)
         total += read_size
-    return collected
+    return _sanitize_logs(collected)
+
+
+def _sanitize_logs(logs: dict[str, str]) -> dict[str, str]:
+    redactor = Redactor()
+    sanitized: dict[str, str] = {}
+    for filename, content in logs.items():
+        name = redactor.redact(filename)
+        if name in sanitized:
+            digest = fingerprint_sensitive(filename, namespace="ci-log-name").removeprefix(
+                "sha256:"
+            )
+            suffix = 1
+            candidate = f"{name}.{digest}"
+            while candidate in sanitized:
+                candidate = f"{name}.{digest}.{suffix}"
+                suffix += 1
+            name = candidate
+        sanitized[name] = redactor.redact(content)
+    return sanitized
 
 
 def analyze_logs(
@@ -224,7 +243,7 @@ def analyze_logs(
     counts: Counter[str] = Counter()
     timeline: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    for filename, content in logs.items():
+    for filename, content in _sanitize_logs(logs).items():
         lines = content.splitlines()
         for line_number, line in enumerate(lines, start=1):
             for identifier, severity, pattern, recommendation in SIGNATURES:
@@ -308,13 +327,22 @@ def write_bundle(
     destination: Path, report: Report, logs: dict[str, str], metadata: dict[str, Any]
 ) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
+    redactor = Redactor()
+    safe_report = Report.model_validate(redactor.redact_data(report.as_dict()))
+    safe_metadata = redactor.redact_data(metadata)
     with tempfile.TemporaryDirectory(prefix="devops-toolkit-ci-bundle-") as temp_dir:
         root = Path(temp_dir)
-        atomic_write_text(root / "report.json", render_json(report))
-        safe_metadata = Redactor().redact(json.dumps(metadata, indent=2, default=str))
-        atomic_write_text(root / "metadata.json", safe_metadata + "\n")
+        atomic_write_text(root / "report.json", render_json(safe_report))
+        atomic_write_text(
+            root / "metadata.json", json.dumps(safe_metadata, indent=2, default=str) + "\n"
+        )
         logs_root = root / "logs"
-        for filename, content in logs.items():
+        relative_logs = {
+            filename: content
+            for filename, content in logs.items()
+            if not Path(filename).is_absolute() and ".." not in Path(filename).parts
+        }
+        for filename, content in _sanitize_logs(relative_logs).items():
             safe_name = Path(filename)
             if safe_name.is_absolute() or ".." in safe_name.parts:
                 continue
@@ -363,6 +391,7 @@ def build_report(
             max_file_bytes=max_file_bytes,
             max_total_bytes=max_total_bytes,
         )
+        metadata = Redactor().redact_data(metadata)
         findings, signatures, timeline = analyze_logs(logs)
         findings.extend(_job_findings(metadata))
         partial = not bool(logs)
@@ -386,7 +415,7 @@ def build_report(
                 tool_version=__version__,
                 started_at=started,
                 completed_at=completed,
-                target=target,
+                target=Redactor().redact(target),
                 partial=partial,
                 capabilities=[
                     "github-actions-log-download",

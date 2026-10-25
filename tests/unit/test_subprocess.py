@@ -1,4 +1,8 @@
+import json
+import subprocess
 import sys
+
+import pytest
 
 from devops_toolkit.core.subprocess import run_command
 
@@ -34,3 +38,23 @@ def test_timeout_is_reported() -> None:
     result = run_command([sys.executable, "-c", script], timeout_seconds=0.05)
     assert result.timed_out is True
     assert result.returncode == 124
+
+
+@pytest.mark.parametrize("timeout", [False, True])
+def test_structured_credentials_are_sanitized_in_both_streams(
+    monkeypatch: pytest.MonkeyPatch, timeout: bool
+) -> None:
+    marker = "SYNTHETIC_SUBPROCESS_B02 value"
+    output = json.dumps({"password": marker, "ordinary": "keep"})
+
+    def execute(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if timeout:
+            raise subprocess.TimeoutExpired(["synthetic"], 1, output=output, stderr=output)
+        return subprocess.CompletedProcess(["synthetic"], 0, output, output)
+
+    monkeypatch.setattr(subprocess, "run", execute)
+    result = run_command([sys.executable, "-V"])
+    for stream in [result.stdout, result.stderr]:
+        assert marker not in stream
+        assert json.loads(stream) == {"password": "[REDACTED]", "ordinary": "keep"}
+    assert result.returncode == (124 if timeout else 0)
