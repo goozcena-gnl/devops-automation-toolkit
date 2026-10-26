@@ -25,7 +25,12 @@ Report serialization happens after redaction so that JSON remains
 parseable. The same protection covers console, JSON, Markdown, SARIF, and the
 `report.json`, `metadata.json`, and log members of an evidence ZIP. Credential-bearing
 log names are sanitized; distinct files that sanitize to the same name retain
-separate entries using a non-reversible digest suffix.
+separate entries using a non-reversible digest prefix placed before the sanitized
+name. These identifiers stay unchanged through repeated redaction, so report
+references identify the same log members in the ZIP. Names already present are
+reserved before disambiguation; case-insensitive collision checks prevent
+overwrites on Windows as well as POSIX hosts. Ordinary non-colliding names are
+unchanged.
 
 An unterminated sensitive value is redacted through the remaining text rather
 than retaining a possible credential suffix. Keep a separate protected source

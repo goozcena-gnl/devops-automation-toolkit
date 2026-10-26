@@ -8,7 +8,9 @@ import pytest
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
-from devops_toolkit.commands.ci_evidence import build_report, write_bundle
+from devops_toolkit.commands.ci_evidence import analyze_logs, build_report, write_bundle
+from devops_toolkit.core.redaction import Redactor
+from devops_toolkit.reporters.dispatcher import ReportFormat, render_report
 
 
 def test_redacted_report_and_archive_preserve_schema_contract(
@@ -80,3 +82,57 @@ def test_log_directory_target_preserves_report_schema_and_bundle(
         assert marker not in bundled["metadata"]["target"]
     assert marker not in report.metadata.target
     assert report.status.value == "fail"
+
+
+@pytest.mark.parametrize("direct", [False, True])
+def test_collision_evidence_references_match_archived_logs(
+    repository_root: Path,
+    collision_ci_inputs: tuple[Path, Path, dict[str, str], list[str]],
+    tmp_path: Path,
+    direct: bool,
+) -> None:
+    source, metadata_path, raw_logs, secrets = collision_ci_inputs
+    report, logs, metadata = build_report(logs_dir=source, metadata_path=metadata_path)
+    if direct:
+        findings, counts, timeline = analyze_logs(raw_logs)
+        report.findings = findings
+        report.extensions.update(signature_counts=counts, timeline=timeline)
+    names = set(report.extensions["log_files"])
+    assert len(names) == len(raw_logs)
+    assert set(logs) == names
+    assert {finding.resource.name for finding in report.findings} == names
+    assert {finding.resource.identifier for finding in report.findings} == names
+    assert {finding.evidence.location for finding in report.findings} == names
+    assert {item["source"] for item in report.extensions["timeline"]} == names
+    safe = Redactor().redact_data(report.as_dict())
+    assert safe == report.as_dict()
+    schema_dir = repository_root / "configs/schemas"
+    finding_schema = json.loads((schema_dir / "finding.schema.json").read_text())
+    registry = Registry().with_resource(
+        "finding.schema.json", Resource.from_contents(finding_schema)
+    )
+    validator = Draft202012Validator(
+        json.loads((schema_dir / "report.schema.json").read_text()), registry=registry
+    )
+    validator.validate(safe)
+    bundle = tmp_path / "collisions.zip"
+    archive_logs = raw_logs if direct else logs
+    write_bundle(bundle, report, archive_logs, metadata)
+    with zipfile.ZipFile(bundle) as archive:
+        members = archive.namelist()
+        assert len(members) == len(set(members)) == len(raw_logs) + 2
+        assert {name.removeprefix("logs/") for name in members if name.startswith("logs/")} == names
+        bundled = json.loads(archive.read("report.json"))
+        validator.validate(bundled)
+        assert bundled == report.as_dict()
+        assert json.loads(archive.read("metadata.json"))["run"] == {
+            "token": "[REDACTED]",
+            "ordinary": 7,
+        }
+        for finding in report.findings:
+            name = finding.resource.name
+            assert archive.read("logs/" + name).decode("utf-8") == logs[name]
+            assert finding.evidence.summary == logs[name].splitlines()[0]
+        surfaces = [*members, *(archive.read(name).decode("utf-8") for name in members)]
+    surfaces.extend(render_report(report, fmt, color=False) for fmt in ReportFormat)
+    assert all(secret not in surface for secret in secrets for surface in surfaces)

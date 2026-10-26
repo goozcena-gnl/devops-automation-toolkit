@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import json
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 
-from devops_toolkit.commands.ci_evidence import analyze_logs, build_report, write_bundle
+from devops_toolkit.commands.ci_evidence import (
+    _sanitize_logs,
+    analyze_logs,
+    build_report,
+    write_bundle,
+)
 from devops_toolkit.core.models import Severity
+from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive
 from devops_toolkit.reporters.dispatcher import ReportFormat, render_report
 
 
@@ -130,3 +136,112 @@ def test_log_directory_target_preserves_ordinary_absolute_paths(tmp_path: Path) 
     assert report.status.value == "pass"
     assert report.findings == []
     assert logs == {"job.log": "ordinary successful job\n"}
+
+
+@pytest.mark.parametrize("count", [2, 3, 5])
+@pytest.mark.parametrize("parent", ["", "ordinary/context/"])
+def test_collision_names_are_stable_across_all_redaction_boundaries(
+    count: int, parent: str
+) -> None:
+    logs = {
+        f"{parent}password=CANARY{index}.log": f"tests failed job {index}" for index in range(count)
+    }
+    safe = _sanitize_logs(logs)
+    assert len(safe) == count
+    assert set(safe.values()) == set(logs.values())
+    assert "CANARY" not in json.dumps(safe)
+    for name in safe:
+        assert Redactor().redact(name) == name
+        for path_type in [PurePosixPath, PureWindowsPath]:
+            assert not path_type(name).is_absolute()
+            assert ".." not in path_type(name).parts
+    repeated_logs = safe
+    for _ in range(3):
+        repeated_logs = _sanitize_logs(Redactor().redact_data(repeated_logs))
+        assert repeated_logs == safe
+    assert _sanitize_logs(dict(reversed(list(logs.items())))) == safe
+    findings, _, timeline = analyze_logs(logs)
+    repeated, _, _ = analyze_logs(safe)
+    assert {finding.resource.name for finding in findings} == set(safe)
+    assert {item["source"] for item in timeline} == set(safe)
+    assert {finding.fingerprint for finding in repeated} == {
+        finding.fingerprint for finding in findings
+    }
+
+
+def test_collision_names_reserve_existing_safe_names() -> None:
+    digest = fingerprint_sensitive("password=CANARY1.log", namespace="ci-log-name").removeprefix(
+        "sha256:"
+    )
+    reserved = f"{digest}.password=[REDACTED]"
+    logs = {
+        "password=CANARY0.log": "tests failed zero",
+        "password=CANARY1.log": "tests failed one",
+        "password=[REDACTED]": "tests failed existing safe name",
+        reserved: "tests failed existing digest name",
+        "ordinary/job.log": "tests failed ordinary",
+    }
+    safe = _sanitize_logs(logs)
+    assert len(safe) == len(logs)
+    assert set(safe.values()) == set(logs.values())
+    for name in ["password=[REDACTED]", reserved, "ordinary/job.log"]:
+        assert safe[name] == logs[name]
+    assert _sanitize_logs(safe) == safe
+
+
+def test_collision_names_handle_repeated_digests(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "devops_toolkit.commands.ci_evidence.fingerprint_sensitive",
+        lambda *args, **kwargs: "sha256:abc",
+    )
+    logs = {f"token=CANARY{index}.log": f"tests failed {index}" for index in range(5)}
+    safe = _sanitize_logs(logs)
+    assert len(safe) == len(logs)
+    assert set(safe.values()) == set(logs.values())
+    assert _sanitize_logs(safe) == safe
+    assert Redactor().redact_data(safe) == safe
+
+
+def test_collision_names_preserve_ordinary_paths_and_fingerprints() -> None:
+    logs = {
+        "ordinary/job one.log": "tests failed ordinary",
+        "nested/job-two.log": "tests failed other",
+    }
+    assert _sanitize_logs(logs) == logs
+    before, _, _ = analyze_logs(logs)
+    after, _, _ = analyze_logs(_sanitize_logs(_sanitize_logs(logs)))
+    assert [finding.fingerprint for finding in before] == [finding.fingerprint for finding in after]
+
+
+def test_collision_names_are_unique_on_case_insensitive_filesystems() -> None:
+    logs = {
+        "ordinary/Password=CANARY0.log": "tests failed zero",
+        "ordinary/password=CANARY1.log": "tests failed one",
+        "ordinary/PASSWORD=CANARY2.log": "tests failed two",
+    }
+    safe = _sanitize_logs(logs)
+    assert len({str(PureWindowsPath(name)).casefold() for name in safe}) == len(logs)
+    assert _sanitize_logs(safe) == safe
+
+
+@pytest.mark.parametrize(
+    "unsafe", ["../outside.log", "nested/../../outside.log", "token=CANARY/../../outside.log"]
+)
+def test_collision_names_do_not_bypass_archive_path_guards(tmp_path: Path, unsafe: str) -> None:
+    source = tmp_path / "logs"
+    source.mkdir()
+    (source / "ordinary.log").write_text("tests failed ordinary", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    logs = {"password=CANARY0.log": "tests failed zero", "password=CANARY1.log": "tests failed one"}
+    logs[unsafe] = "must not be archived"
+    bundle = tmp_path / "safe.zip"
+    write_bundle(bundle, report, logs, {})
+    with zipfile.ZipFile(bundle) as archive:
+        members = [name for name in archive.namelist() if name.startswith("logs/")]
+        assert len(members) == 2
+        assert all(".." not in PurePosixPath(name).parts for name in members)
+        assert {archive.read(name).decode("utf-8") for name in members} == {
+            "tests failed zero",
+            "tests failed one",
+        }
+    assert not (tmp_path / "outside.log").exists()

@@ -99,3 +99,59 @@ def test_log_directory_target_is_sanitized_on_every_cli_surface(
             assert "[REDACTED]" in bundled["metadata"]["target"]
     leaks = [name for name, content in surfaces.items() if marker in "".join(content.split())]
     assert leaks == []
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("report_format", ["console", "json", "markdown", "sarif"])
+def test_collision_cli_keeps_report_and_archive_references_aligned(
+    collision_ci_inputs: tuple[Path, Path, dict[str, str], list[str]],
+    tmp_path: Path,
+    report_format: str,
+) -> None:
+    source, metadata, raw_logs, secrets = collision_ci_inputs
+    for output_mode in ["stdout", "file"]:
+        bundle = tmp_path / (output_mode + "-collision.zip")
+        output = tmp_path / ("collision-report." + report_format)
+        args = [
+            sys.executable,
+            "-m",
+            "devops_toolkit",
+            "ci-evidence",
+            "--logs-dir",
+            str(source),
+            "--metadata",
+            str(metadata),
+            "--bundle",
+            str(bundle),
+            "--format",
+            report_format,
+            "--no-color",
+        ]
+        if output_mode == "file":
+            args.extend(["--output", str(output)])
+        result = subprocess.run(args, capture_output=True, text=True, check=False, timeout=30)
+        assert result.returncode == 1
+        rendered = result.stdout if output_mode == "stdout" else output.read_text(encoding="utf-8")
+        surfaces = [result.stdout, result.stderr, rendered]
+        with zipfile.ZipFile(bundle) as archive:
+            members = archive.namelist()
+            assert len(members) == len(set(members)) == len(raw_logs) + 2
+            report = json.loads(archive.read("report.json"))
+            assert report["schema_version"] == "1.0"
+            names = set(report["extensions"]["log_files"])
+            assert len(names) == len(raw_logs)
+            assert {
+                name.removeprefix("logs/") for name in members if name.startswith("logs/")
+            } == names
+            assert {item["source"] for item in report["extensions"]["timeline"]} == names
+            for finding in report["findings"]:
+                name = finding["resource"]["name"]
+                assert name in names
+                assert finding["resource"]["identifier"] == finding["evidence"]["location"] == name
+                log = archive.read("logs/" + name).decode("utf-8")
+                assert finding["evidence"]["summary"] == log.splitlines()[0]
+            if report_format == "json":
+                assert json.loads(rendered) == report
+            surfaces.extend(members)
+            surfaces.extend(archive.read(name).decode("utf-8") for name in members)
+        assert all(secret not in surface for secret in secrets for surface in surfaces)

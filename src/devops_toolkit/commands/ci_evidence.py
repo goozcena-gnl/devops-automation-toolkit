@@ -220,19 +220,25 @@ def _collect_log_files(root: Path, *, max_file_bytes: int, max_total_bytes: int)
 def _sanitize_logs(logs: dict[str, str]) -> dict[str, str]:
     redactor = Redactor()
     sanitized: dict[str, str] = {}
-    for filename, content in logs.items():
-        name = redactor.redact(filename)
-        if name in sanitized:
+    names = {filename: redactor.redact(filename) for filename in logs}
+    reserved = {name.casefold() for name in names.values()}
+    used: set[str] = set()
+    # Keep already-safe names, then assign colliding inputs in a stable order.
+    for filename in sorted(logs, key=lambda item: (item != names[item], item)):
+        name = names[filename]
+        if name.casefold() in used:
             digest = fingerprint_sensitive(filename, namespace="ci-log-name").removeprefix(
                 "sha256:"
             )
             suffix = 1
-            candidate = f"{name}.{digest}"
-            while candidate in sanitized:
-                candidate = f"{name}.{digest}.{suffix}"
+            # A suffix would be consumed as part of a bare credential value.
+            candidate = f"{digest}.{name}"
+            while candidate.casefold() in used or candidate.casefold() in reserved:
+                candidate = f"{digest}.{suffix}.{name}"
                 suffix += 1
             name = candidate
-        sanitized[name] = redactor.redact(content)
+        used.add(name.casefold())
+        sanitized[name] = redactor.redact(logs[filename])
     return sanitized
 
 

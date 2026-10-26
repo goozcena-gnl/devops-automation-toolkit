@@ -46,3 +46,24 @@ def structured_ci_inputs(tmp_path: Path) -> tuple[Path, Path, list[str]]:
         encoding="utf-8",
     )
     return logs, metadata, secrets
+
+
+@pytest.fixture
+def collision_ci_inputs(tmp_path: Path) -> tuple[Path, Path, dict[str, str], list[str]]:
+    logs = tmp_path / "collision-logs"
+    logs.mkdir()
+    secrets = [f"CANARY{index}" for index in range(4)]
+    raw_logs = {
+        f"ordinary/{['password', 'Password', 'PASSWORD', 'password'][index]}={secret}.log": (
+            f"exit code 137 job {index}\n" + json.dumps({"token": secret}) + "\n"
+        )
+        for index, secret in enumerate(secrets)
+    }
+    raw_logs["ordinary/plain.log"] = "exit code 137 ordinary job\n"
+    for name, content in raw_logs.items():
+        path = logs / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8", newline="\n")
+    metadata = tmp_path / "collision-metadata.json"
+    metadata.write_text(json.dumps({"run": {"token": secrets[0], "ordinary": 7}}), encoding="utf-8")
+    return logs, metadata, raw_logs, secrets
