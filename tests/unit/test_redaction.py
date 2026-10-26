@@ -1,5 +1,6 @@
 import json
 import logging
+import shlex
 
 import pytest
 
@@ -228,3 +229,176 @@ def test_bare_assignment_special_characters_keep_no_secret_suffix(secret: str) -
     assert Redactor().redact("password=" + secret) == "password=[REDACTED]"
     text = json.dumps({"message": "password=" + secret, "ordinary": 7})
     assert json.loads(Redactor().redact(text)) == {"message": "password=[REDACTED]", "ordinary": 7}
+
+
+@pytest.mark.parametrize("key", ["password", "token"])
+@pytest.mark.parametrize(
+    ("value", "masked"),
+    [
+        ('"SYNTHETIC_FIRST"', '"[REDACTED]"'),
+        ("SYNTHETIC_FIRST", "[REDACTED]"),
+        ('"prefix"SYNTHETIC_SUFFIX', '"[REDACTED]"'),
+        ("'prefix'SYNTHETIC_SUFFIX", "'[REDACTED]'"),
+        ('prefix"SYNTHETIC MIDDLE"suffix', "[REDACTED]"),
+        ("'SYNTHETIC_FIRST'\"SYNTHETIC_SECOND\"SYNTHETIC_THIRD", "'[REDACTED]'"),
+        ("\"first\"'SYNTHETIC SECOND'SYNTHETIC_THIRD", '"[REDACTED]"'),
+        (r'"SYNTHETIC_FIRST\"middle"SYNTHETIC_SUFFIX', '"[REDACTED]"'),
+        (r"SYNTHETIC_FIRST\"SYNTHETIC_SUFFIX", "[REDACTED]"),
+        (r'"first"\ SYNTHETIC_SUFFIX', '"[REDACTED]"'),
+        (r"first\;SYNTHETIC_SUFFIX", "[REDACTED]"),
+        (r"first\|SYNTHETIC_SUFFIX", "[REDACTED]"),
+        (r'first\\"SYNTHETIC MIDDLE"suffix', "[REDACTED]"),
+        ("'first\\'SYNTHETIC_SUFFIX", "'[REDACTED]'"),
+    ],
+)
+def test_shell_segments_are_one_credential(key: str, value: str, masked: str) -> None:
+    text = f"runner {key}={value}; count=7 --ordinary keep"
+    expected = f"runner {key}={masked}; count=7 --ordinary keep"
+    redactor = Redactor()
+    result = redactor.redact(text)
+    assert result == expected
+    assert "SYNTHETIC" not in result
+    assert redactor.redact(result) == result
+
+
+@pytest.mark.parametrize(
+    "separator", [" ", "\t", "\n", ";", "|", "||", "&", "&&", ">", ">>", "<", "(", ")"]
+)
+def test_shell_segments_preserve_independent_context(separator: str) -> None:
+    text = 'password="prefix"SYNTHETIC_SUFFIX' + separator + "ordinary"
+    assert Redactor().redact(text) == 'password="[REDACTED]"' + separator + "ordinary"
+
+
+@pytest.mark.parametrize("depth", [0, 1, 2, 3])
+@pytest.mark.parametrize(
+    "value",
+    [
+        '"prefix"SYNTHETIC_SUFFIX',
+        "'prefix'SYNTHETIC_SUFFIX",
+        'prefix"SYNTHETIC MIDDLE"suffix',
+        '"prefix"$(printf SYNTHETIC_SUFFIX)',
+        '"prefix"`printf SYNTHETIC_SUFFIX`',
+    ],
+)
+def test_shell_segments_inside_serialized_json_preserve_benign_fields(
+    depth: int, value: str
+) -> None:
+    original = {"message": f"tests failed token={value}; count=7", "ordinary": [7, True, None]}
+    text = json.dumps(original)
+    for _ in range(depth):
+        text = json.dumps(text)
+    result = Redactor().redact(text)
+    assert Redactor().redact(result) == result
+    for _ in range(depth + 1):
+        result = json.loads(result)
+    assert result["ordinary"] == original["ordinary"]
+    assert result["message"].startswith("tests failed token=")
+    assert result["message"].endswith("; count=7")
+    assert "SYNTHETIC" not in json.dumps(result)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        '"SYNTHETIC\nMIDDLE"SYNTHETIC_SUFFIX',
+        "first\\\nSYNTHETIC_SUFFIX",
+        "first\\\r\nSYNTHETIC_SUFFIX",
+    ],
+)
+def test_shell_segments_preserve_following_line_locations(value: str) -> None:
+    text = f"password={value}\nordinary context\ntests failed"
+    result = Redactor().redact(text)
+    assert "SYNTHETIC" not in result
+    assert result.count("\n") == text.count("\n")
+    assert result.splitlines()[-2:] == ["ordinary context", "tests failed"]
+    assert Redactor().redact(result) == result
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        '"first"SYNTHETIC_SUFFIX"truncated',
+        "first'SYNTHETIC MIDDLE",
+        '"SYNTHETIC MIDDLE',
+        "SYNTHETIC_SUFFIX\\",
+    ],
+)
+def test_truncated_shell_segments_leave_no_secret(value: str) -> None:
+    redactor = Redactor()
+    result = redactor.redact("password=" + value)
+    assert "SYNTHETIC" not in result
+    assert "MIDDLE" not in result
+    assert "truncated" not in result
+    assert redactor.redact(result) == result
+
+
+def test_shell_segments_keep_custom_replacement_and_pattern_order() -> None:
+    redactor = Redactor(replacement="MASK", extra_patterns=["customer-[0-9]+"])
+    result = redactor.redact('password="prefix"SYNTHETIC_SUFFIX; customer-123 ordinary')
+    assert result == 'password="MASK"; MASK ordinary'
+    assert redactor.redact(result) == result
+
+
+def test_shell_segments_are_redacted_by_logging_filter() -> None:
+    record = logging.LogRecord(
+        "synthetic", logging.INFO, __file__, 1, "%s", ('password="prefix"SYNTHETIC_SUFFIX',), None
+    )
+    assert RedactingFilter().filter(record)
+    assert record.getMessage() == 'password="[REDACTED]"'
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        '"prefix",SYNTHETIC_SUFFIX',
+        '"prefix"`printf SYNTHETIC_SUFFIX`',
+        '"prefix"$(printf SYNTHETIC_SUFFIX)',
+        'prefix$(printf "SYNTHETIC MIDDLE")suffix',
+        "\"prefix$(printf 'SYNTHETIC MIDDLE')\"suffix",
+        "${name:-SYNTHETIC SUFFIX}tail",
+        "prefix$((1 + SYNTHETIC_SUFFIX))tail",
+        "prefix<(printf SYNTHETIC_SUFFIX)tail",
+        r"$'prefix\'SYNTHETIC MIDDLE'tail",
+    ],
+)
+def test_shell_segments_include_commas_and_nested_expansions(value: str) -> None:
+    redactor = Redactor()
+    result = redactor.redact("password=" + value + "; count=7")
+    assert "SYNTHETIC" not in result
+    assert result.endswith("; count=7")
+    assert redactor.redact(result) == result
+
+
+@pytest.mark.parametrize(
+    "replacement", ["MASK", "masked value", "SAFE'X", 'mask "quoted" \\ slash', "$(unclosed"]
+)
+@pytest.mark.parametrize(
+    "value",
+    ['"prefix"SYNTHETIC_SUFFIX', "'prefix'SYNTHETIC_SUFFIX", 'prefix"SYNTHETIC MIDDLE"suffix'],
+)
+def test_shell_segments_custom_marker_is_a_stable_word(replacement: str, value: str) -> None:
+    redactor = Redactor(replacement=replacement)
+    result = redactor.redact("password=" + value + "; count=7")
+    assert "SYNTHETIC" not in result
+    assert result.endswith("; count=7")
+    assert shlex.split(result.removesuffix("; count=7")) == ["password=" + replacement]
+    assert redactor.redact(result) == result
+
+
+@pytest.mark.parametrize("replacement", ["masked value", "SAFE'X", 'mask "quoted" \\ slash'])
+def test_shell_segments_custom_marker_survives_nested_json(replacement: str) -> None:
+    redactor = Redactor(replacement=replacement)
+    text = json.dumps(
+        json.dumps({"message": 'password=prefix"SYNTHETIC MIDDLE"suffix; count=7', "safe": 7})
+    )
+    result = redactor.redact(text)
+    assert redactor.redact(result) == result
+    value = json.loads(json.loads(result))
+    assert value["safe"] == 7
+    assert "SYNTHETIC" not in value["message"]
+    assert shlex.split(value["message"].removesuffix("; count=7")) == ["password=" + replacement]
+
+
+def test_shell_segments_many_adjacent_quotes_are_consumed() -> None:
+    text = "password=" + '"segment"' * 10_000 + "SYNTHETIC_SUFFIX; ordinary"
+    assert Redactor().redact(text) == 'password="[REDACTED]"; ordinary'

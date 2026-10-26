@@ -136,3 +136,34 @@ def test_collision_evidence_references_match_archived_logs(
         surfaces = [*members, *(archive.read(name).decode("utf-8") for name in members)]
     surfaces.extend(render_report(report, fmt, color=False) for fmt in ReportFormat)
     assert all(secret not in surface for secret in secrets for surface in surfaces)
+
+
+def test_shell_segments_keep_schema_and_evidence_locations(
+    repository_root: Path, tmp_path: Path
+) -> None:
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
+    text = 'password="prefix\nSYNTHETIC_P1_MIDDLE"SYNTHETIC_P1_SUFFIX\nexit code 137\n'
+    (logs_dir / "ordinary.log").write_text(text, encoding="utf-8", newline="\n")
+    report, logs, metadata = build_report(logs_dir=logs_dir)
+    schema_dir = repository_root / "configs/schemas"
+    finding_schema = json.loads((schema_dir / "finding.schema.json").read_text())
+    registry = Registry().with_resource(
+        "finding.schema.json", Resource.from_contents(finding_schema)
+    )
+    validator = Draft202012Validator(
+        json.loads((schema_dir / "report.schema.json").read_text()), registry=registry
+    )
+    validator.validate(report.as_dict())
+    assert report.findings[0].evidence.line == 3
+    assert report.extensions["timeline"][0]["line"] == 3
+    assert "SYNTHETIC_P1" not in report.model_dump_json()
+    assert "SYNTHETIC_P1" not in logs["ordinary.log"]
+    assert logs["ordinary.log"].count("\n") == text.count("\n")
+    bundle = tmp_path / "shell-contract.zip"
+    write_bundle(bundle, report, logs, metadata)
+    with zipfile.ZipFile(bundle) as archive:
+        bundled = json.loads(archive.read("report.json"))
+        validator.validate(bundled)
+        assert bundled == report.as_dict()
+        assert "SYNTHETIC_P1" not in archive.read("logs/ordinary.log").decode("utf-8")

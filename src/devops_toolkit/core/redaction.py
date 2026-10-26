@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 from collections.abc import Callable
 from dataclasses import dataclass
 from hashlib import sha256
@@ -73,7 +74,51 @@ def _quoted_end(text: str, start: int, delimiter: str) -> tuple[int, bool]:
     return len(text), False
 
 
+def _shell_value_end(text: str, start: int) -> tuple[int, str, bool]:
+    """Consume adjacent shell-word segments without swallowing the next command."""
+    delimiter = text[start] if text[start] in "\"'" else ""
+    stack: list[str] = []
+    position = start
+    while position < len(text):
+        char = text[position]
+        frame = stack[-1] if stack else ""
+        if char == "\\" and frame != "'":
+            position += 3 if text.startswith("\\\r\n", position) else 2
+            continue
+        if frame in {"'", "ansi"}:
+            if char == "'":
+                stack.pop()
+            position += 1
+            continue
+        if frame and char == frame:
+            stack.pop()
+        elif text.startswith(("$(", "${"), position):
+            stack.append(")" if text[position + 1] == "(" else "}")
+            position += 2
+            continue
+        elif frame != '"' and text.startswith(("<(", ">("), position):
+            stack.append(")")
+            position += 2
+            continue
+        elif frame != '"' and text.startswith("$'", position):
+            stack.append("ansi")
+            position += 2
+            continue
+        elif char == "`" or (frame != '"' and char in "\"'"):
+            stack.append(char)
+        elif frame == ")" and char == "(":
+            stack.append(")")
+        elif frame == "}" and char == "{":
+            stack.append("}")
+        elif not stack and char in " \t\r\n;|&<>()":
+            break
+        position += 1
+    return min(position, len(text)), delimiter, not stack
+
+
 def _value_end(text: str, start: int, *, structured: bool) -> tuple[int, str, bool]:
+    if not structured:
+        return _shell_value_end(text, start)
     if quote := _QUOTE.match(text, start):
         end, closed = _quoted_end(text, start, quote[0])
         return end, quote[0], closed
@@ -155,7 +200,10 @@ def _redact_assignments(text: str, replacement: str) -> str:
         end, value_quote, closed = _value_end(text, start, structured=bool(delimiter))
         if end == start:
             continue
-        if value_quote:
+        if not delimiter and any(char in replacement for char in " \t\r\n\"'\\$`;|&<>()"):
+            # Emit a single stable shell word even for a custom marker with quotes.
+            safe = shlex.quote(replacement)
+        elif value_quote:
             safe = _replacement_token(replacement, value_quote, closed=closed)
         elif delimiter:
             safe = _replacement_token(replacement, delimiter)

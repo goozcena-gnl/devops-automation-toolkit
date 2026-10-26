@@ -58,3 +58,20 @@ def test_structured_credentials_are_sanitized_in_both_streams(
         assert marker not in stream
         assert json.loads(stream) == {"password": "[REDACTED]", "ordinary": "keep"}
     assert result.returncode == (124 if timeout else 0)
+
+
+@pytest.mark.parametrize("timeout", [False, True])
+def test_shell_segments_are_sanitized_in_both_subprocess_streams(
+    monkeypatch: pytest.MonkeyPatch, timeout: bool
+) -> None:
+    output = 'password="prefix"SYNTHETIC_SUFFIX; ordinary'
+
+    def execute(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if timeout:
+            raise subprocess.TimeoutExpired(["synthetic"], 1, output=output, stderr=output)
+        return subprocess.CompletedProcess(["synthetic"], 0, output, output)
+
+    monkeypatch.setattr(subprocess, "run", execute)
+    result = run_command([sys.executable, "-V"])
+    assert result.stdout == result.stderr == 'password="[REDACTED]"; ordinary'
+    assert result.returncode == (124 if timeout else 0)
