@@ -704,7 +704,7 @@ def ci_evidence_command(
         no_color=no_color_from_config(merged, no_color),
     )
     if bundle is not None:
-        typer.echo(f"bundle={bundle}", err=True)
+        typer.echo(f"bundle={Redactor().redact_path(str(bundle))}", err=True)
     _raise_for_report(int(exit_code_for_report(report)))
 
 

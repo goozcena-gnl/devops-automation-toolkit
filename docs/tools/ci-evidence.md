@@ -19,8 +19,21 @@ and JSON embedded as an escaped string in a text log. Ordinary fields, timestamp
 line numbers, and failure classifications remain available.
 
 Local and downloaded metadata are sanitized before generating findings and report
-extensions. The displayed log-directory target is sanitized before rendering;
+extensions. Provider JSON is parsed before structural redaction so text masking
+cannot collapse distinct keys before they can be disambiguated. Provider error
+details are explicitly redacted before display. The displayed log-directory target is sanitized before rendering;
 the source path used for collection and ordinary displayed paths are unchanged.
+Path redaction treats both `/` and `\` as separators and masks a credential
+through the rest of its component, including internal spaces. Ordinary directory
+names and child paths remain available. Recognized log extensions (`.log`, `.txt`,
+`.json`, `.jsonl`, `.ndjson`, `.out`, `.err`) are retained; credential-bearing
+components may lose their assignment label to keep identifiers stable through
+later text redaction. Log identifiers use `/` separators on all hosts; repeated
+separators and `.` components are normalized to match archive member paths.
+This intentionally changes identifiers for previously incompletely masked paths,
+not benign paths or their fingerprints.
+Displayed output-file and bundle paths use the same path masking on stdout and
+stderr; the actual source and destination paths are never rewritten.
 Report serialization happens after redaction so that JSON remains
 parseable. The same protection covers console, JSON, Markdown, SARIF, and the
 `report.json`, `metadata.json`, and log members of an evidence ZIP. Credential-bearing
@@ -33,6 +46,25 @@ Case-insensitive collision checks handle both identical names and files that
 would occupy another log's ancestor directory, preventing overwrites or failed
 bundle writes on Windows as well as POSIX hosts. Ordinary non-colliding names
 are unchanged.
+
+Direct Python metadata inputs are normalized before recursive redaction: tuples
+become JSON arrays, `pathlib` paths become component-redacted strings, and dates
+and timestamps use ISO 8601 strings. JSON scalars, arrays and objects retain
+their types. Unknown objects become the replacement marker without invoking
+`str()`; archive serialization has no later string-conversion fallback.
+Non-string dictionary keys, non-finite numbers, cycles and nesting beyond 64
+levels fail explicitly rather than emitting ambiguous or unsafe metadata.
+JSON object keys remain case-sensitive and Unicode-distinct. Colliding sanitized
+keys retain all values using a non-reversible digest prefix with a numeric
+fallback; existing safe keys are reserved first. Repeated sanitization preserves
+those keys and diagnostics. JSON strings in recognized path fields also use
+component-aware masking: `path`, `file`, `filename`, `directory`, `dir`, their
+plurals, and underscore/hyphen-delimited suffixes such as `log_path` or
+`artifact_paths`. Camel-case forms such as `logPath` and `workingDirectory`
+and case variants are recognized. Path context passes through arrays, including
+nested arrays; nested objects use their own field names so ordinary `message`
+diagnostics retain text-log rules. Other string fields keep text-log rules;
+use `pathlib` values for direct Python paths without a recognized field name.
 
 Plain provider logs do not establish shell syntax. Punctuation such as `&`, `|`,
 `(`, `)`, `<`, `>` and `;` immediately adjacent to a credential remains part of

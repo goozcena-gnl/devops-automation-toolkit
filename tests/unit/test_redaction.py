@@ -1,11 +1,231 @@
 import json
 import logging
 import shlex
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 
 from devops_toolkit.core.logging import RedactingFilter
 from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "path",
+        "log_path",
+        "LOG_PATH",
+        "logPath",
+        "log-path",
+        "filename",
+        "file_name",
+        "file-name",
+        "working_directory",
+        "workingDirectory",
+        "artifact_paths",
+        "directories",
+        "log_files",
+    ],
+)
+@pytest.mark.parametrize(
+    "path",
+    [
+        "ordinary/token=CANARY_HEAD CANARY_TAIL/job.log",
+        r"C:\ordinary directory\token=CANARY_HEAD CANARY_TAIL\job.log",
+    ],
+)
+def test_json_metadata_path_fields_mask_complete_components(field: str, path: str) -> None:
+    redactor = Redactor()
+    value = {"nested": [{"diagnostics": {field: [path, {"path": path}, [[path]]]}}]}
+    safe = redactor.redact_data(value)
+    assert "CANARY_HEAD" not in str(safe)
+    assert "CANARY_TAIL" not in str(safe)
+    assert safe["nested"][0]["diagnostics"][field][0] == redactor.redact_path(path)
+    assert safe["nested"][0]["diagnostics"][field][1]["path"] == redactor.redact_path(path)
+    assert safe["nested"][0]["diagnostics"][field][2][0][0] == redactor.redact_path(path)
+    assert redactor.redact_data(safe) == safe
+    assert redactor.redact_data(redactor.redact_data(safe)) == safe
+
+
+def test_json_path_context_preserves_ordinary_diagnostics() -> None:
+    value = {
+        "message": "tests failed token=CANARY_HEAD count=7",
+        "path": {"message": "tests failed token=CANARY_HEAD count=7"},
+        "log_path": "ordinary directory/job.log",
+        "profile": "tests failed token=CANARY_HEAD count=7",
+        "path_count": 7,
+    }
+    safe = Redactor().redact_data(value)
+    assert safe["message"] == safe["path"]["message"] == safe["profile"]
+    assert safe["message"].endswith("count=7")
+    assert safe["log_path"] == value["log_path"]
+    assert safe["path_count"] == 7
+
+
+class UnsupportedDiagnostic:
+    def __str__(self) -> str:
+        return "password=CANARY_OBJECT"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        ("token=CANARY_TUPLE", 7, True, None),
+        Path("ordinary") / "password=CANARY_PATH",
+        [{"nested": (Path("token=CANARY_NESTED"), ["secret=CANARY_LIST"])}],
+        UnsupportedDiagnostic(),
+    ],
+)
+def test_normalized_metadata_cannot_introduce_credentials(value: object) -> None:
+    redactor = Redactor()
+    safe = redactor.redact_data({"diagnostics": value})
+    encoded = json.dumps(safe)
+    assert "CANARY" not in encoded
+    assert json.loads(encoded) == safe
+    assert redactor.redact_data(safe) == safe
+    assert "CANARY" in json.dumps({"diagnostics": value}, default=str)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_metadata_key_collisions_preserve_all_diagnostics(reverse: bool) -> None:
+    values = {
+        "token=CANARY_FIRST": {"code": 137},
+        "token=CANARY_SECOND": {"code": 1},
+        "token=[REDACTED]": {"code": 7},
+        "ordinary": {"code": 0},
+        "TOKEN=CANARY_UPPER": {"code": 2},
+        "caf\u00e9": {"code": 3},
+        "cafe\u0301": {"code": 4},
+    }
+    original = {"run": values}
+    if reverse:
+        original = {"run": dict(reversed(list(values.items())))}
+    redactor = Redactor()
+    safe = redactor.redact_data(original)
+    assert len(safe["run"]) == len(values)
+    assert sorted(item["code"] for item in safe["run"].values()) == [0, 1, 2, 3, 4, 7, 137]
+    assert safe["run"]["token=[REDACTED]"] == {"code": 7}
+    assert safe["run"]["ordinary"] == {"code": 0}
+    assert "CANARY" not in json.dumps(safe)
+    assert safe == redactor.redact_data({"run": dict(reversed(list(values.items())))})
+    for _ in range(3):
+        assert redactor.redact_data(safe) == safe
+
+
+@pytest.mark.parametrize("path_type", [PurePosixPath, PureWindowsPath])
+def test_path_objects_with_space_containing_credentials_are_normalized_safely(path_type) -> None:
+    value = path_type("ordinary directory") / "token=CANARY_HEAD CANARY_TAIL" / "child.log"
+    safe = Redactor().redact_data({"path": value})
+    assert "CANARY" not in json.dumps(safe)
+    assert "ordinary directory" in safe["path"]
+    assert safe["path"].endswith("child.log")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "token=CANARY_HEAD CANARY_TAIL",
+        "password=CANARY_HEAD CANARY_TAIL/child.log",
+        "ordinary/token=CANARY_HEAD CANARY_TAIL/job.log",
+        r"C:\ordinary directory\token=CANARY_HEAD CANARY_TAIL\job.log",
+        r"\\server\share\password=CANARY_HEAD CANARY_TAIL\child.log",
+        'ordinary/"password":"CANARY_HEAD",CANARY_TAIL.log',
+        "ordinary/token='CANARY_HEAD'CANARY_TAIL.txt",
+        "ordinary/token=CANARY_HEAD\tCANARY_TAIL.jsonl",
+        "ordinary/token=CANARY_HEAD\nCANARY_TAIL",
+        "ordinary/token=[REDACTED] CANARY_TAIL/child.log",
+    ],
+)
+def test_path_redaction_preserves_structure_and_stable_extensions(path: str) -> None:
+    redactor = Redactor()
+    safe = redactor.redact_path(path)
+    assert "CANARY" not in safe
+    assert path.count("/") == safe.count("/")
+    assert path.count("\\") == safe.count("\\")
+    for extension in [".log", ".txt", ".jsonl"]:
+        if path.endswith(extension):
+            assert safe.endswith(extension)
+    assert redactor.redact_path(safe) == safe
+    assert redactor.redact(safe) == safe
+    assert redactor.redact_data({"path": safe})["path"] == safe
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["ordinary directory/child.log", r"C:\ordinary directory\child.log", "../ordinary.log"],
+)
+def test_ordinary_paths_are_byte_for_byte_unchanged(path: str) -> None:
+    assert Redactor().redact_path(path) == path
+
+
+def test_unknown_normalization_never_invokes_string_conversion() -> None:
+    class UnsafeConversion:
+        def __str__(self) -> str:
+            raise AssertionError("Unknown metadata conversion must not execute")
+
+    assert Redactor().redact_data(UnsafeConversion()) == "[REDACTED]"
+    assert Redactor(replacement="MASK").redact_data(UnsafeConversion()) == "MASK"
+
+
+@pytest.mark.parametrize("value", [{1: "CANARY_KEY"}, float("nan"), float("inf")])
+def test_invalid_metadata_fails_closed_without_credential_in_error(value: object) -> None:
+    with pytest.raises(ValueError) as error:
+        Redactor().redact_data(value)
+    assert "CANARY" not in str(error.value)
+
+
+def test_cyclic_and_excessively_nested_metadata_fail_closed() -> None:
+    cyclic: list[object] = []
+    cyclic.append(cyclic)
+    with pytest.raises(ValueError, match="maximum nesting depth"):
+        Redactor().redact_data(cyclic)
+    nested: object = "password=CANARY_DEEP"
+    for _ in range(70):
+        nested = [nested]
+    with pytest.raises(ValueError, match="maximum nesting depth"):
+        Redactor().redact_data(nested)
+
+
+def test_metadata_key_digest_collisions_and_reserved_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "devops_toolkit.core.redaction.fingerprint_sensitive", lambda *args, **kwargs: "sha256:abc"
+    )
+    raw = {f"token=CANARY_{index} CANARY_TAIL": index for index in range(6)}
+    raw.update({"[REDACTED]": 6, "abc.[REDACTED]": 7, "abc.1.[REDACTED]": 8})
+    redactor = Redactor()
+    safe = redactor.redact_data({"nested": [raw]})["nested"][0]
+    assert len(safe) == len(raw)
+    assert sorted(safe.values()) == list(range(9))
+    for key in ["[REDACTED]", "abc.[REDACTED]", "abc.1.[REDACTED]"]:
+        assert safe[key] == raw[key]
+    assert "CANARY" not in json.dumps(safe)
+    assert redactor.redact_data(safe) == safe
+    assert redactor.redact_data(dict(reversed(list(raw.items())))) == safe
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        r'ordinary/{"\u0070assword":"CANARY_HEAD CANARY_TAIL"}/job.log',
+        r'ordinary/path="bad\q" {"password":"CANARY_HEAD CANARY_TAIL"}/job.log',
+        "https://ordinary:CANARY_HEAD@example.invalid/logs",
+    ],
+)
+def test_encoded_path_fragments_and_urls_remain_redacted(path: str) -> None:
+    redactor = Redactor()
+    safe = redactor.redact_path(path)
+    assert "CANARY" not in safe
+    assert redactor.redact_path(safe) == safe
+    assert redactor.redact(safe) == safe
+
+
+def test_colliding_keys_with_escaped_surrogates_remain_serializable() -> None:
+    raw = {f"token=CANARY{chr(0xD800 + index)}": code for index, code in enumerate([137, 1])}
+    safe = Redactor().redact_data(raw)
+    assert len(safe) == 2
+    assert sorted(safe.values()) == [1, 137]
+    assert "CANARY" not in json.dumps(safe)
+    assert Redactor().redact_data(safe) == safe
 
 
 def test_redacts_common_credentials() -> None:

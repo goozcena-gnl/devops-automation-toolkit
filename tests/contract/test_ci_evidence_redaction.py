@@ -13,6 +13,119 @@ from devops_toolkit.core.redaction import Redactor
 from devops_toolkit.reporters.dispatcher import ReportFormat, render_report
 
 
+def test_json_string_path_metadata_is_safe_on_every_export(tmp_path: Path) -> None:
+    path = "ordinary/token=CANARY_HEAD CANARY_TAIL/job.log"
+    raw = {
+        "log_path": path,
+        "run": {
+            "log_path": path,
+            "nested": [{"artifact_paths": [path, r"C:\token=CANARY_HEAD CANARY_TAIL\job.log"]}],
+            "ordinary": {"count": 7, "message": "tests failed; count=7"},
+        },
+    }
+    metadata_path = tmp_path / "metadata.json"
+    metadata_path.write_text(json.dumps(raw), encoding="utf-8")
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
+    (logs_dir / "job.log").write_text("exit code 137\n", encoding="utf-8")
+    report, logs, metadata = build_report(logs_dir=logs_dir, metadata_path=metadata_path)
+    surfaces = [
+        str(Redactor().redact_data({"log_path": path})),
+        json.dumps(metadata),
+        report.model_dump_json(),
+    ]
+    surfaces.extend(render_report(report, fmt, color=False) for fmt in ReportFormat)
+    assert report.extensions["run"] == metadata["run"]
+    assert metadata["run"]["ordinary"] == raw["run"]["ordinary"]
+    bundle = tmp_path / "string-paths.zip"
+    # Pass raw metadata to exercise the archive's independent final boundary.
+    write_bundle(bundle, report, logs, raw)
+    with zipfile.ZipFile(bundle) as archive:
+        bundled = json.loads(archive.read("report.json"))
+        assert bundled == report.as_dict()
+        assert json.loads(archive.read("metadata.json")) == metadata
+        surfaces.extend(archive.read(name).decode("utf-8") for name in archive.namelist())
+    assert all(
+        fragment not in surface
+        for fragment in ["CANARY_HEAD", "CANARY_TAIL"]
+        for surface in surfaces
+    )
+
+
+@pytest.mark.parametrize("provider", [False, True])
+def test_latest_metadata_and_path_boundaries_preserve_export_contracts(
+    repository_root: Path,
+    latest_ci_inputs: tuple[Path, Path, dict[str, str], list[str]],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    provider: bool,
+) -> None:
+    source, metadata_path, raw, fragments = latest_ci_inputs
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if provider:
+        metadata["diagnostics"] = (
+            Path("ordinary") / "token=CANARY_HEAD CANARY_TAIL",
+            {"nested": ["password=CANARY_HEAD"]},
+        )
+        monkeypatch.setattr(
+            "devops_toolkit.commands.ci_evidence._collect_github_metadata",
+            lambda *args: metadata,
+        )
+
+        def download(repository: str, run_id: int, destination: Path, timeout: int) -> None:
+            with zipfile.ZipFile(destination, "w") as archive:
+                for name, content in raw.items():
+                    archive.writestr(name, content)
+
+        monkeypatch.setattr("devops_toolkit.commands.ci_evidence._download_github_logs", download)
+        report, logs, safe_metadata = build_report(repository="synthetic/repository", run_id=7)
+    else:
+        report, logs, safe_metadata = build_report(logs_dir=source, metadata_path=metadata_path)
+    assert report.schema_version == "1.0"
+    assert report.status.value == "fail"
+    assert report.metadata.partial is False
+    assert sorted(
+        item["code"] for item in safe_metadata["run"].values() if isinstance(item, dict)
+    ) == [1, 7, 137]
+    assert safe_metadata["run"]["ordinary"] == [7, True, None]
+    assert report.extensions["run"] == safe_metadata["run"]
+    names = set(logs)
+    assert len(names) == len(raw)
+    assert set(report.extensions["log_files"]) == names
+    assert {item["source"] for item in report.extensions["timeline"]} == names
+    for finding in report.findings:
+        if finding.resource.type == "CILog":
+            name = finding.resource.name
+            assert name == finding.resource.identifier == finding.evidence.location
+            assert name in names
+            assert finding.evidence.summary == logs[name].splitlines()[finding.evidence.line - 1]
+    assert Redactor().redact_data(report.as_dict()) == report.as_dict()
+    schema_dir = repository_root / "configs/schemas"
+    finding_schema = json.loads((schema_dir / "finding.schema.json").read_text())
+    registry = Registry().with_resource(
+        "finding.schema.json", Resource.from_contents(finding_schema)
+    )
+    validator = Draft202012Validator(
+        json.loads((schema_dir / "report.schema.json").read_text()), registry=registry
+    )
+    validator.validate(report.as_dict())
+    bundle = tmp_path / "latest-contract.zip"
+    write_bundle(bundle, report, raw, metadata)
+    surfaces = [report.model_dump_json(), json.dumps(safe_metadata), *logs, *logs.values()]
+    surfaces.extend(render_report(report, fmt, color=False) for fmt in ReportFormat)
+    with zipfile.ZipFile(bundle) as archive:
+        members = archive.namelist()
+        assert len(members) == len(set(members)) == len(raw) + 2
+        assert {name[5:] for name in members if name.startswith("logs/")} == names
+        bundled = json.loads(archive.read("report.json"))
+        validator.validate(bundled)
+        assert bundled == report.as_dict()
+        assert json.loads(archive.read("metadata.json")) == safe_metadata
+        surfaces.extend(members)
+        surfaces.extend(archive.read(name).decode("utf-8") for name in members)
+    assert all(fragment not in surface for fragment in fragments for surface in surfaces)
+
+
 def test_redacted_report_and_archive_preserve_schema_contract(
     repository_root: Path, structured_ci_inputs: tuple[Path, Path, list[str]], tmp_path: Path
 ) -> None:

@@ -11,6 +11,69 @@ import pytest
 
 @pytest.mark.integration
 @pytest.mark.parametrize("report_format", ["console", "json", "markdown", "sarif"])
+def test_latest_metadata_and_paths_never_leak_or_lose_diagnostics(
+    latest_ci_inputs: tuple[Path, Path, dict[str, str], list[str]],
+    tmp_path: Path,
+    report_format: str,
+) -> None:
+    source, metadata, raw, fragments = latest_ci_inputs
+    fragments = [*fragments, "CANARY_OUTPUT_HEAD", "CANARY_OUTPUT_TAIL"]
+    output_dir = tmp_path / "token=CANARY_OUTPUT_HEAD CANARY_OUTPUT_TAIL"
+    for file_output in [False, True]:
+        bundle = output_dir / f"latest-{file_output}.zip"
+        output = output_dir / ("latest." + report_format)
+        args = [
+            sys.executable,
+            "-m",
+            "devops_toolkit",
+            "ci-evidence",
+            "--logs-dir",
+            str(source),
+            "--metadata",
+            str(metadata),
+            "--bundle",
+            str(bundle),
+            "--format",
+            report_format,
+            "--no-color",
+        ]
+        if file_output:
+            args.extend(["--output", str(output)])
+        completed = subprocess.run(args, capture_output=True, text=True, timeout=30, check=False)
+        assert completed.returncode == 1
+        rendered = output.read_text(encoding="utf-8") if file_output else completed.stdout
+        surfaces = [completed.stdout, completed.stderr, rendered]
+        with zipfile.ZipFile(bundle) as archive:
+            members = archive.namelist()
+            report = json.loads(archive.read("report.json"))
+            metadata_payload = json.loads(archive.read("metadata.json"))
+            assert report["schema_version"] == "1.0"
+            assert report["extensions"]["run"] == metadata_payload["run"]
+            assert sorted(
+                item["code"] for item in metadata_payload["run"].values() if isinstance(item, dict)
+            ) == [1, 7, 137]
+            names = set(report["extensions"]["log_files"])
+            assert len(names) == len(raw)
+            assert {name[5:] for name in members if name.startswith("logs/")} == names
+            assert {item["source"] for item in report["extensions"]["timeline"]} == names
+            for finding in report["findings"]:
+                if finding["resource"]["type"] == "CILog":
+                    name = finding["resource"]["name"]
+                    assert name in names
+                    assert (
+                        finding["resource"]["identifier"] == finding["evidence"]["location"] == name
+                    )
+            if report_format == "json":
+                assert json.loads(rendered) == report
+            if report_format == "sarif":
+                assert json.loads(rendered)["version"] == "2.1.0"
+            surfaces.extend(members)
+            surfaces.extend(archive.read(name).decode("utf-8") for name in members)
+        assert all(fragment not in surface for fragment in fragments for surface in surfaces)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("report_format", ["console", "json", "markdown", "sarif"])
 def test_ci_cli_redacts_structured_credentials_in_every_output(
     structured_ci_inputs: tuple[Path, Path, list[str]], tmp_path: Path, report_format: str
 ) -> None:

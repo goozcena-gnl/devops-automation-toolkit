@@ -155,23 +155,29 @@ def _collect_github_metadata(repository: str, run_id: int, timeout: int) -> dict
         ["gh", "api", f"repos/{repository}/actions/runs/{run_id}"],
         timeout_seconds=timeout,
         max_output_chars=500_000,
-        sanitize_output=True,
+        sanitize_output=False,
     )
     jobs_result = run_command(
         ["gh", "api", f"repos/{repository}/actions/runs/{run_id}/jobs?filter=all&per_page=100"],
         timeout_seconds=timeout,
         max_output_chars=2_000_000,
-        sanitize_output=True,
+        sanitize_output=False,
     )
     if not run_result.succeeded or not jobs_result.succeeded:
         detail = run_result.stderr or jobs_result.stderr or "GitHub API request failed"
-        raise CommandExecutionError(f"Unable to collect GitHub Actions metadata: {detail[:1000]}")
+        safe_detail = Redactor().redact(detail)
+        raise CommandExecutionError(
+            f"Unable to collect GitHub Actions metadata: {safe_detail[:1000]}"
+        )
     try:
         run_payload = json.loads(run_result.stdout)
         jobs_payload = json.loads(jobs_result.stdout)
     except json.JSONDecodeError as exc:
         raise CommandExecutionError(f"GitHub API returned invalid JSON: {exc}") from exc
-    return {"run": run_payload, "jobs": jobs_payload.get("jobs", [])}
+    safe_metadata: dict[str, Any] = Redactor().redact_data(
+        {"run": run_payload, "jobs": jobs_payload.get("jobs", [])}
+    )
+    return safe_metadata
 
 
 def _extract_zip(source: Path, destination: Path, *, max_total_bytes: int) -> None:
@@ -220,7 +226,9 @@ def _collect_log_files(root: Path, *, max_file_bytes: int, max_total_bytes: int)
 def _sanitize_logs(logs: dict[str, str]) -> dict[str, str]:
     redactor = Redactor()
     sanitized: dict[str, str] = {}
-    names = {filename: redactor.redact(filename) for filename in logs}
+    names = {
+        filename: PureWindowsPath(redactor.redact_path(filename)).as_posix() for filename in logs
+    }
     reserved = {PureWindowsPath(name.casefold()) for name in names.values()}
     reserved_dirs = {parent for path in reserved for parent in path.parents}
     used: set[PureWindowsPath] = set()
@@ -349,19 +357,21 @@ def write_bundle(
 ) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     redactor = Redactor()
-    safe_report = Report.model_validate(redactor.redact_data(report.as_dict()))
+    report_data = report.model_dump(mode="python", exclude_none=True)
+    report_data["metadata"]["target"] = redactor.redact_path(report.metadata.target)
+    safe_report = Report.model_validate(redactor.redact_data(report_data))
     safe_metadata = redactor.redact_data(metadata)
     with tempfile.TemporaryDirectory(prefix="devops-toolkit-ci-bundle-") as temp_dir:
         root = Path(temp_dir)
         atomic_write_text(root / "report.json", render_json(safe_report))
         atomic_write_text(
-            root / "metadata.json", json.dumps(safe_metadata, indent=2, default=str) + "\n"
+            root / "metadata.json", json.dumps(safe_metadata, indent=2, allow_nan=False) + "\n"
         )
         logs_root = root / "logs"
         relative_logs = {
             filename: content
             for filename, content in logs.items()
-            if not Path(filename).is_absolute() and ".." not in Path(filename).parts
+            if not PureWindowsPath(filename).anchor and ".." not in PureWindowsPath(filename).parts
         }
         for filename, content in _sanitize_logs(relative_logs).items():
             safe_name = Path(filename)
@@ -436,7 +446,7 @@ def build_report(
                 tool_version=__version__,
                 started_at=started,
                 completed_at=completed,
-                target=Redactor().redact(target),
+                target=Redactor().redact_path(target),
                 partial=partial,
                 capabilities=[
                     "github-actions-log-download",

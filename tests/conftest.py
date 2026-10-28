@@ -12,6 +12,52 @@ def repository_root() -> Path:
 
 
 @pytest.fixture
+def latest_ci_inputs(tmp_path: Path) -> tuple[Path, Path, dict[str, str], list[str]]:
+    source = tmp_path / "token=CANARY_TARGET_HEAD CANARY_TARGET_TAIL" / "ordinary directory"
+    source.mkdir(parents=True)
+    fragments = ["CANARY_HEAD", "CANARY_TAIL", "CANARY_TARGET_HEAD", "CANARY_TARGET_TAIL"]
+    names = [
+        "token=CANARY_HEAD CANARY_TAIL",
+        "password=CANARY_HEAD CANARY_TAIL/child.log",
+        "ordinary/token=CANARY_HEAD CANARY_TAIL/job.log",
+        "token=CANARY_HEAD CANARY_TAIL.log",
+        "[REDACTED].log",
+        "ordinary directory/plain.log",
+    ]
+    raw = {name: f"exit code 137 tests failed job {index}\n" for index, name in enumerate(names)}
+    for name, content in raw.items():
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8", newline="\n")
+    metadata = tmp_path / "latest-metadata.json"
+    metadata.write_text(
+        json.dumps(
+            {
+                "run": {
+                    "token=CANARY_HEAD": {"code": 137},
+                    "token=CANARY_TAIL": {"code": 1},
+                    "[REDACTED]": {"code": 7},
+                    "ordinary": [7, True, None],
+                    "artifact_paths": [
+                        "ordinary/token=CANARY_HEAD CANARY_TAIL/job.log",
+                        {"logPath": r"C:\ordinary\token=CANARY_HEAD CANARY_TAIL\job.log"},
+                    ],
+                },
+                "jobs": [
+                    {
+                        "id": 1,
+                        "name": 'tests failed path="unmatched {"password":"CANARY_HEAD CANARY_TAIL"}',
+                        "conclusion": "failure",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    return source, metadata, raw, fragments
+
+
+@pytest.fixture
 def structured_ci_inputs(tmp_path: Path) -> tuple[Path, Path, list[str]]:
     """Offline credentials with no provider-token syntax or real account data."""
     logs = tmp_path / "logs"

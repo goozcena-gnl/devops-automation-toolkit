@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import shlex
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from datetime import date, datetime
 from hashlib import sha256
+from pathlib import PurePath
 from re import Pattern
 from typing import Any
 
@@ -385,21 +388,96 @@ class Redactor:
         return _redact_assignments(redacted, self._replacement)
 
     def redact_data(self, value: Any) -> Any:
-        """Sanitize JSON-compatible data before it is rendered or serialized."""
+        """Normalize then sanitize data; unknown objects become the replacement."""
+        return self._redact_data(self._normalize_data(value))
+
+    def _normalize_data(self, value: Any, depth: int = 0) -> Any:
+        if depth > 64:
+            raise ValueError("Redaction data exceeds the maximum nesting depth of 64")
         if isinstance(value, dict):
-            return {
-                self.redact(key) if isinstance(key, str) else key: (
+            if any(not isinstance(key, str) for key in value):
+                raise ValueError("Redaction data requires string dictionary keys")
+            return {key: self._normalize_data(item, depth + 1) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self._normalize_data(item, depth + 1) for item in value]
+        if isinstance(value, PurePath):
+            return self.redact_path(str(value))
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("Redaction data requires finite JSON numbers")
+        if value is None or isinstance(value, (str, bool, int, float)):
+            return value
+        # Never invoke an unknown object's potentially unsafe/non-deterministic __str__.
+        return self._replacement
+
+    def _redact_data(self, value: Any, *, path_field: bool = False) -> Any:
+        if isinstance(value, dict):
+            names = {key: self.redact_path(key) for key in value}
+            reserved = set(names.values())
+            safe: dict[str, Any] = {}
+            for key in sorted(value, key=lambda item: (item != names[item], item)):
+                name = names[key]
+                if name in safe:
+                    digest = fingerprint_sensitive(
+                        json.dumps(key, ensure_ascii=True), namespace="redaction-key"
+                    ).removeprefix("sha256:")
+                    candidate = f"{digest}.{name}"
+                    suffix = 1
+                    while candidate in safe or candidate in reserved:
+                        candidate = f"{digest}.{suffix}.{name}"
+                        suffix += 1
+                    name = candidate
+                safe[name] = (
                     self._replacement
-                    if isinstance(key, str) and _sensitive_key(key)
-                    else self.redact_data(item)
+                    if _sensitive_key(key)
+                    else self._redact_data(
+                        value[key],
+                        path_field=bool(
+                            re.search(
+                                r"(?:^|[_-])"
+                                r"(?:paths?|files?|file[_-]?names?|directories|directory|dirs?)$",
+                                re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key).lower(),
+                            )
+                        ),
+                    )
                 )
-                for key, item in value.items()
-            }
+            return safe
         if isinstance(value, list):
-            return [self.redact_data(item) for item in value]
+            return [self._redact_data(item, path_field=path_field) for item in value]
         if isinstance(value, str):
-            return self.redact(value)
+            return self.redact_path(value) if path_field else self.redact(value)
         return value
+
+    def redact_path(self, value: str) -> str:
+        """Mask credentials through each component, not just its first whitespace."""
+        parts = re.split(r"([/\\])", value)
+        for index in range(0, len(parts), 2):
+            component = parts[index]
+            assignment = next(
+                (
+                    match
+                    for match in _ASSIGNMENT.finditer(component)
+                    if _assignment_is_sensitive(match)
+                ),
+                None,
+            )
+            extension = re.search(r"\.(?:log|txt|json|jsonl|ndjson|out|err)$", component, re.I)
+            safe = self.redact(component)
+            if assignment and not (
+                index == len(parts) - 1
+                and safe == component
+                and not any(char.isspace() for char in component[assignment.end() :])
+            ):
+                # Drop the label so extensions and child paths survive text redaction too.
+                parts[index] = (
+                    self.redact(component[: assignment.start()])
+                    + self._replacement
+                    + (extension[0] if extension else "")
+                )
+            else:
+                parts[index] = safe
+        return self.redact("".join(parts))
 
 
 def fingerprint_sensitive(value: str, namespace: str = "secret") -> str:
