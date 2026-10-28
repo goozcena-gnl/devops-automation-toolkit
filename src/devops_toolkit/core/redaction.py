@@ -42,21 +42,92 @@ _ASSIGNMENT = re.compile(
 )
 _QUOTE = re.compile(r"""\\*["']""")
 _JSON_STRING = re.compile(r'(?<!\\)"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"')
+_JSON_TOKEN = re.compile(_JSON_STRING.pattern + r"|[{}\[\]]")
+_SEPARATED_OPERATOR = re.compile(r"[;|&<>()]+(?=[ \t\r\n])")
+
+
+def _verified_json_spans(text: str) -> list[tuple[int, int]]:
+    """Verify disjoint enclosing containers, without retrying nested failed prefixes."""
+    spans: list[tuple[int, int]] = []
+    stack: list[str] = []
+    start = 0
+    for token in _JSON_TOKEN.finditer(text):
+        char = token[0]
+        if char in {"{", "["}:
+            if not stack:
+                start = token.start()
+            stack.append("}" if char == "{" else "]")
+        elif char in {"}", "]"} and stack:
+            stack.pop()
+            if not stack:
+                end = token.end()
+                if (
+                    end < len(text)
+                    and not text[end].isspace()
+                    and not _SEPARATED_OPERATOR.match(text, end)
+                ):
+                    continue
+                try:
+                    json.loads(text[start:end])
+                except (ValueError, RecursionError):
+                    continue
+                spans.append((start, end))
+    return spans
 
 
 def _redact_json_strings(text: str, sanitize: Callable[[str], str]) -> str:
     """Decode JSON string tokens before inspecting their embedded log text."""
 
-    def replace(match: re.Match[str]) -> str:
+    parts: list[str] = []
+    previous = 0
+    spans = iter(_verified_json_spans(text))
+    span = next(spans, None)
+    for match in _JSON_STRING.finditer(text):
+        if match.start() < previous:
+            continue
+        end = match.end()
+        while span is not None and span[1] <= match.start():
+            span = next(spans, None)
+        verified = span is not None and span[0] <= match.start() and end <= span[1]
         decoded = json.loads(match[0])
         safe = sanitize(decoded)
-        return match[0] if safe == decoded else json.dumps(safe)
-
-    return _JSON_STRING.sub(replace, text)
+        if (
+            (
+                safe != decoded
+                or any(_assignment_is_sensitive(item) for item in _ASSIGNMENT.finditer(decoded))
+            )
+            and not verified
+            and end < len(text)
+            and text[end] not in " \t\r\n"
+        ):
+            # A sensitive JSON-looking token does not establish a separate tail.
+            end, _, _ = _shell_value_end(text, match.start())
+        parts.extend(
+            (
+                text[previous : match.start()],
+                match[0] if safe == decoded else json.dumps(safe),
+            )
+        )
+        parts.append("\n" * text.count("\n", match.end(), end))
+        previous = end
+    parts.append(text[previous:])
+    return "".join(parts)
 
 
 def _sensitive_key(key: str) -> bool:
     return key.casefold().replace("_", "").replace("-", "") in SENSITIVE_KEYS
+
+
+def _assignment_is_sensitive(match: re.Match[str]) -> bool:
+    if match["bare"]:
+        return True
+    name = match["name"]
+    try:
+        for _ in range(len(match["quoted"]).bit_length()):
+            name = json.loads('"' + name + '"')
+    except (ValueError, RecursionError):
+        return False
+    return _sensitive_key(name)
 
 
 def _quoted_end(text: str, start: int, delimiter: str) -> tuple[int, bool]:
@@ -75,10 +146,15 @@ def _quoted_end(text: str, start: int, delimiter: str) -> tuple[int, bool]:
 
 
 def _shell_value_end(text: str, start: int) -> tuple[int, str, bool]:
-    """Consume adjacent shell-word segments without swallowing the next command."""
+    """Consume ambiguous log values, including shell quoting and adjacent punctuation.
+
+    Callers do not establish shell syntax. Only whitespace-separated operators
+    retain diagnostic context; an adjacent suffix may still be a credential.
+    """
     delimiter = text[start] if text[start] in "\"'" else ""
     stack: list[str] = []
     position = start
+    operator_end = start
     while position < len(text):
         char = text[position]
         frame = stack[-1] if stack else ""
@@ -110,17 +186,28 @@ def _shell_value_end(text: str, start: int) -> tuple[int, str, bool]:
             stack.append(")")
         elif frame == "}" and char == "{":
             stack.append("}")
-        elif not stack and char in " \t\r\n;|&<>()":
+        elif not stack and char in " \t\r\n":
             break
+        elif not stack and char in ";|&<>()":
+            if position >= operator_end:
+                operator_end = position + 1
+                while operator_end < len(text) and text[operator_end] in ";|&<>()":
+                    operator_end += 1
+            if operator_end < len(text) and text[operator_end] in " \t\r\n":
+                break
         position += 1
     return min(position, len(text)), delimiter, not stack
 
 
-def _value_end(text: str, start: int, *, structured: bool) -> tuple[int, str, bool]:
+def _value_end(
+    text: str, start: int, *, structured: bool, verified: bool = False
+) -> tuple[int, str, bool]:
     if not structured:
         return _shell_value_end(text, start)
     if quote := _QUOTE.match(text, start):
         end, closed = _quoted_end(text, start, quote[0])
+        if closed and not verified and end < len(text) and text[end] not in " \t\r\n":
+            end, _, closed = _shell_value_end(text, end)
         return end, quote[0], closed
     if structured and start < len(text) and text[start] in "[{":
         stack = ["]" if text[start] == "[" else "}"]
@@ -143,22 +230,21 @@ def _value_end(text: str, start: int, *, structured: bool) -> tuple[int, str, bo
                 if char != stack.pop():
                     break
                 if not stack:
-                    return position + 1, "", True
+                    end = position + 1
+                    if not verified and end < len(text) and text[end] not in " \t\r\n":
+                        end, _, closed = _shell_value_end(text, end)
+                        return end, "", closed
+                    return end, "", True
             position += 1
         return len(text), "", False
-    position = start
-    delimiters = " \t\r\n,;" + ("\"'{}[]" if structured else "")
-    while position < len(text) and text[position] not in delimiters:
-        if text[position] == "\\":
-            end = position
-            while end < len(text) and text[end] == "\\":
-                end += 1
-            if structured and end < len(text) and text[end] in "\"'":
-                break
-            position = end
-        else:
-            position += 1
-    return position, "", True
+    try:
+        _, end = json.JSONDecoder().raw_decode(text, start)
+    except (ValueError, RecursionError):
+        return _shell_value_end(text, start)
+    if verified or end == len(text) or text[end] in " \t\r\n":
+        return end, "", True
+    # A quoted key alone does not make its unquoted value valid JSON.
+    return _shell_value_end(text, start)
 
 
 def _replacement_token(replacement: str, delimiter: str, *, closed: bool = True) -> str:
@@ -176,28 +262,31 @@ def _redact_assignments(text: str, replacement: str) -> str:
     previous = 0
     strings = iter(_JSON_STRING.finditer(text))
     token = next(strings, None)
+    spans = iter(_verified_json_spans(text))
+    span = next(spans, None)
     for match in _ASSIGNMENT.finditer(text):
         if match.start() < previous:
             continue
         while token is not None and token.end() <= match.start():
             token = next(strings, None)
-        if match["bare"] and token is not None and token.start() <= match.start():
-            # Complete string tokens were sanitized at their decoded boundary.
+        if token is not None and token.start() < match.start():
+            # Complete string tokens, including embedded keys, were sanitized decoded.
             continue
         delimiter = match["quoted"]
-        if delimiter:
-            name = match["name"]
-            try:
-                for _ in range(len(delimiter).bit_length()):
-                    name = json.loads('"' + name + '"')
-            except (ValueError, RecursionError):
-                continue
-            if not _sensitive_key(name):
-                continue
+        if not _assignment_is_sensitive(match):
+            continue
         start = match.end()
         if start == len(text):
             continue
-        end, value_quote, closed = _value_end(text, start, structured=bool(delimiter))
+        while span is not None and span[1] <= match.start():
+            span = next(spans, None)
+        verified = span is not None and span[0] <= match.start() and start < span[1]
+        end, value_quote, closed = _value_end(
+            text,
+            start,
+            structured=bool(delimiter) and ":" in match["separator"],
+            verified=verified,
+        )
         if end == start:
             continue
         if not delimiter and any(char in replacement for char in " \t\r\n\"'\\$`;|&<>()"):

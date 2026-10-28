@@ -32,6 +32,21 @@ reserved before disambiguation; case-insensitive collision checks prevent
 overwrites on Windows as well as POSIX hosts. Ordinary non-colliding names are
 unchanged.
 
+Plain provider logs do not establish shell syntax. Punctuation such as `&`, `|`,
+`(`, `)`, `<`, `>` and `;` immediately adjacent to a credential remains part of
+that value, including concatenated quoted/unquoted segments. Operators followed
+by whitespace can retain separated context such as `; count=7`. Valid JSON value
+boundaries and ordinary fields remain intact when an enclosing JSON container
+is structurally verified. A quoted key or punctuation alone does not establish
+valid JSON: sensitive malformed fragments, including adjacent commas or closing
+brackets/braces and their suffixes, are consumed conservatively. This applies
+again to decoded strings inside otherwise valid JSON. Malformed source text
+is not repaired into JSON; rendered reports still follow schema 1.0.
+This can also hide an adjacent command or diagnostic when its boundary is
+ambiguous: complete credential masking takes precedence over that context.
+Whitespace still separates unquoted log values; quote values containing spaces
+or supply structured metadata rather than relying on inferred shell syntax.
+
 An unterminated sensitive value is redacted through the remaining text rather
 than retaining a possible credential suffix. Keep a separate protected source
 copy if the original evidence is required. Unlabelled secrets or arbitrary

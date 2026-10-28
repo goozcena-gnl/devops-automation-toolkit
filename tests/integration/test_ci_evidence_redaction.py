@@ -236,3 +236,67 @@ def test_shell_segments_never_reach_ci_exports(tmp_path: Path, report_format: st
             if report_format == "json":
                 assert json.loads(rendered) == report
         assert all("SYNTHETIC_P1" not in surface for surface in surfaces)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("report_format", ["console", "json", "markdown", "sarif"])
+def test_provider_punctuation_never_reaches_cli_exports(
+    punctuation_ci_inputs: tuple[Path, Path, dict[str, str], list[str]],
+    tmp_path: Path,
+    report_format: str,
+) -> None:
+    source, metadata, raw_logs, fragments = punctuation_ci_inputs
+    for mode in ["stdout", "file"]:
+        bundle = tmp_path / (mode + "-provider.zip")
+        output = tmp_path / ("provider-report." + report_format)
+        args = [
+            sys.executable,
+            "-m",
+            "devops_toolkit",
+            "ci-evidence",
+            "--logs-dir",
+            str(source),
+            "--metadata",
+            str(metadata),
+            "--bundle",
+            str(bundle),
+            "--format",
+            report_format,
+            "--no-color",
+        ]
+        if mode == "file":
+            args.extend(["--output", str(output)])
+        result = subprocess.run(args, capture_output=True, text=True, check=False, timeout=30)
+        assert result.returncode == 1
+        rendered = result.stdout if mode == "stdout" else output.read_text(encoding="utf-8")
+        surfaces = [result.stdout, result.stderr, rendered]
+        if report_format in {"json", "sarif"}:
+            payload = json.loads(rendered)
+            assert payload.get("schema_version", payload.get("version")) in {"1.0", "2.1.0"}
+        with zipfile.ZipFile(bundle) as archive:
+            members = archive.namelist()
+            assert len(members) == len(set(members)) == len(raw_logs) + 2
+            report = json.loads(archive.read("report.json"))
+            assert report["schema_version"] == "1.0"
+            assert report["extensions"]["run"]["ordinary"] == [7, True, None]
+            names = set(report["extensions"]["log_files"])
+            assert len(names) == len(raw_logs)
+            assert {
+                name.removeprefix("logs/") for name in members if name.startswith("logs/")
+            } == names
+            assert {item["source"] for item in report["extensions"]["timeline"]} == names
+            for finding in report["findings"]:
+                if finding["resource"]["type"] != "CILog":
+                    continue
+                name = finding["resource"]["name"]
+                assert name == finding["resource"]["identifier"] == finding["evidence"]["location"]
+                content = archive.read("logs/" + name).decode("utf-8")
+                assert (
+                    finding["evidence"]["summary"]
+                    == content.splitlines()[finding["evidence"]["line"] - 1]
+                )
+            if report_format == "json":
+                assert json.loads(rendered) == report
+            surfaces.extend(members)
+            surfaces.extend(archive.read(name).decode("utf-8") for name in members)
+        assert all(fragment not in surface for fragment in fragments for surface in surfaces)

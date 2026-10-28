@@ -211,7 +211,10 @@ def test_multiline_sensitive_values_preserve_following_log_line_numbers() -> Non
 
 def test_long_malformed_container_is_sanitized() -> None:
     text = '{"password": [' + "\\" * 100_000 + "]}"
-    assert json.loads(Redactor().redact(text)) == {"password": "[REDACTED]"}
+    # Invalid JSON cannot prove that the final brace is separate from the secret.
+    result = Redactor().redact(text)
+    assert result == '{"password": "[REDACTED]"'
+    assert Redactor().redact(result) == result
 
 
 def test_escaped_surrogate_in_ordinary_log_text_remains_serializable() -> None:
@@ -266,7 +269,17 @@ def test_shell_segments_are_one_credential(key: str, value: str, masked: str) ->
 )
 def test_shell_segments_preserve_independent_context(separator: str) -> None:
     text = 'password="prefix"SYNTHETIC_SUFFIX' + separator + "ordinary"
-    assert Redactor().redact(text) == 'password="[REDACTED]"' + separator + "ordinary"
+    redactor = Redactor()
+    result = redactor.redact(text)
+    # Without whitespace, an operator does not prove that the tail is not secret.
+    expected = 'password="[REDACTED]"'
+    if separator.isspace():
+        expected += separator + "ordinary"
+    assert result == expected
+    assert "SYNTHETIC" not in result
+    assert redactor.redact(result) == result
+    separated = 'password="prefix"SYNTHETIC_SUFFIX' + separator + " ordinary"
+    assert redactor.redact(separated) == 'password="[REDACTED]"' + separator + " ordinary"
 
 
 @pytest.mark.parametrize("depth", [0, 1, 2, 3])
@@ -402,3 +415,199 @@ def test_shell_segments_custom_marker_survives_nested_json(replacement: str) -> 
 def test_shell_segments_many_adjacent_quotes_are_consumed() -> None:
     text = "password=" + '"segment"' * 10_000 + "SYNTHETIC_SUFFIX; ordinary"
     assert Redactor().redact(text) == 'password="[REDACTED]"; ordinary'
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("password=prefix&CANARY_SUFFIX", "password=[REDACTED]"),
+        ("password=prefix(CANARY_SUFFIX)", "password=[REDACTED]"),
+        ("token=prefix|CANARY_SUFFIX", "token=[REDACTED]"),
+        ("secret=prefix<CANARY_SUFFIX", "secret=[REDACTED]"),
+        ('password="prefix"CANARY_SUFFIX', 'password="[REDACTED]"'),
+        ("token='prefix'CANARY_SUFFIX", "token='[REDACTED]'"),
+    ],
+)
+def test_review_p1_requested_canaries(text: str, expected: str) -> None:
+    redactor = Redactor()
+    assert redactor.redact(text) == expected
+    assert redactor.redact(expected) == expected
+
+
+@pytest.mark.parametrize("punctuation", ["&", "&&", "|", "||", "<", ">", ">>", "(", ")", ";"])
+@pytest.mark.parametrize("head", ["", "CANARY_HEAD", '"CANARY_HEAD"', "'CANARY_HEAD'"])
+@pytest.mark.parametrize("depth", [0, 1, 2, 3])
+def test_provider_credentials_include_adjacent_punctuation(
+    punctuation: str, head: str, depth: int
+) -> None:
+    message = f"tests failed password={head}{punctuation}CANARY_TAIL; count=7"
+    text = json.dumps({"message": message, "ordinary": [7, True, None]})
+    for _ in range(depth):
+        text = json.dumps(text)
+    redactor = Redactor()
+    result = redactor.redact(text)
+    assert "CANARY" not in result
+    assert redactor.redact(result) == result
+    for _ in range(depth + 1):
+        result = json.loads(result)
+    assert result["ordinary"] == [7, True, None]
+    assert result["message"].startswith("tests failed password=")
+    assert result["message"].endswith("; count=7")
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        '"password"="CANARY_HEAD"CANARY_TAIL',
+        '"password":"CANARY_HEAD"CANARY_TAIL',
+        '"password=CANARY_HEAD"CANARY_TAIL',
+        '"password=[REDACTED]"&CANARY_TAIL',
+        "'token':'CANARY_HEAD'|CANARY_TAIL",
+    ],
+)
+def test_ambiguous_quoted_tokens_include_the_credential_tail(message: str) -> None:
+    redactor = Redactor()
+    for text in [message, json.dumps({"message": message, "ordinary": 7})]:
+        result = redactor.redact(text)
+        assert "CANARY" not in result
+        assert redactor.redact(result) == result
+        if text.startswith("{"):
+            assert json.loads(result)["ordinary"] == 7
+
+
+@pytest.mark.parametrize("punctuation", ["&", "|", "<", ">", "(", ")", ";"])
+def test_provider_punctuation_keeps_following_line_locations(punctuation: str) -> None:
+    text = f"password=CANARY_HEAD{punctuation}CANARY_TAIL\nordinary context\nexit code 137"
+    result = Redactor().redact(text)
+    assert result == "password=[REDACTED]\nordinary context\nexit code 137"
+
+
+def test_long_ambiguous_punctuation_and_truncated_quotes_are_bounded() -> None:
+    text = "password=" + "&|<>();" * 10_000 + '"CANARY_HEAD' + "\\" * 100_000
+    assert Redactor().redact(text) == "password=[REDACTED]"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '"ordinary"suffix',
+        json.dumps('{"ordinary":7}') + "suffix",
+        json.dumps("token_count=7") + "&diagnostic",
+        "ordinary/path(with)&punctuation.log",
+        "tests failed; count=7 | ordinary & context",
+    ],
+)
+def test_benign_punctuation_and_quoted_tokens_are_unchanged(text: str) -> None:
+    assert Redactor().redact(text) == text
+
+
+@pytest.mark.parametrize("punctuation", ["&", "|", "<", "("])
+def test_provider_credentials_are_sanitized_by_logging_filter(punctuation: str) -> None:
+    record = logging.LogRecord(
+        "synthetic",
+        logging.INFO,
+        __file__,
+        1,
+        "%s",
+        (f"password=CANARY_HEAD{punctuation}CANARY_TAIL",),
+        None,
+    )
+    assert RedactingFilter().filter(record)
+    assert record.getMessage() == "password=[REDACTED]"
+
+
+@pytest.mark.parametrize("key", ['"password"', "'token'"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "CANARY_HEAD;CANARY_TAIL",
+        ";CANARY_TAIL",
+        "CANARY_HEAD'CANARY MIDDLE'CANARY_TAIL",
+        "CANARY_HEAD[CANARY_TAIL]end",
+        "${CANARY_HEAD}&CANARY_TAIL",
+        "123&CANARY_TAIL",
+        "true&CANARY_TAIL",
+    ],
+)
+def test_quoted_keys_do_not_establish_a_valid_json_scalar(key: str, value: str) -> None:
+    message = key + ":" + value
+    redactor = Redactor()
+    for text in [message, json.dumps({"message": message, "ordinary": 7})]:
+        safe = redactor.redact(text)
+        assert "CANARY" not in safe
+        assert redactor.redact(safe) == safe
+        if text.startswith("{"):
+            assert json.loads(safe)["ordinary"] == 7
+
+
+@pytest.mark.parametrize(
+    "fragment",
+    [
+        '"password":"CANARY_HEAD",CANARY_TAIL',
+        '"password":123,CANARY_TAIL',
+        '"password":["CANARY_HEAD"],CANARY_TAIL',
+        '"password":{"raw":"CANARY_HEAD"},CANARY_TAIL',
+        '"password":"CANARY_HEAD"]CANARY_TAIL',
+        '"password":"CANARY_HEAD"}CANARY_TAIL',
+        '"password=CANARY_HEAD",CANARY_TAIL',
+        '{"password":"CANARY_HEAD"}CANARY_TAIL',
+    ],
+)
+@pytest.mark.parametrize("depth", [0, 1, 2, 3])
+def test_malformed_json_boundaries_mask_complete_credentials(fragment: str, depth: int) -> None:
+    text = fragment + "\nordinary diagnostic\nexit code 137"
+    for _ in range(depth):
+        text = json.dumps({"message": text, "ordinary": [7, True, None]})
+    redactor = Redactor()
+    safe = redactor.redact(text)
+    assert "CANARY" not in safe
+    assert redactor.redact(safe) == safe
+    for _ in range(depth):
+        decoded = json.loads(safe)
+        assert decoded["ordinary"] == [7, True, None]
+        safe = decoded["message"]
+    assert safe.splitlines()[1:] == ["ordinary diagnostic", "exit code 137"]
+
+
+@pytest.mark.parametrize("depth", [0, 1, 2, 3])
+def test_verified_json_boundaries_preserve_typed_diagnostics(depth: int) -> None:
+    original = {
+        "nested": [{"password": {"raw": ["CANARY_HEAD", 123]}, "count": 7}],
+        "ordinary": [7, True, None, "diagnostic,]}suffix"],
+    }
+    text = "runner prefix " + json.dumps(original) + " runner suffix"
+    for _ in range(depth):
+        text = json.dumps({"message": text, "ordinary": False})
+    redactor = Redactor()
+    safe = redactor.redact(text)
+    assert "CANARY" not in safe
+    assert redactor.redact(safe) == safe
+    for _ in range(depth):
+        decoded = json.loads(safe)
+        assert decoded["ordinary"] is False
+        safe = decoded["message"]
+    decoded = json.loads(safe.removeprefix("runner prefix ").removesuffix(" runner suffix"))
+    assert decoded == {**original, "nested": [{"password": "[REDACTED]", "count": 7}]}
+
+
+@pytest.mark.parametrize("suffix", ["; ordinary", "| ordinary", "&& ordinary", ") ordinary"])
+@pytest.mark.parametrize("key", ["password", "message"])
+@pytest.mark.parametrize("depth", [0, 1, 2])
+def test_verified_json_preserves_fields_before_separated_operators(
+    suffix: str, key: str, depth: int
+) -> None:
+    original = {key: "CANARY_HEAD" if key == "password" else "password=CANARY_HEAD", "count": 7}
+    text = json.dumps(original) + suffix
+    for _ in range(depth):
+        text = json.dumps(text)
+    redactor = Redactor()
+    safe = redactor.redact(text)
+    assert "CANARY" not in safe
+    assert redactor.redact(safe) == safe
+    for _ in range(depth):
+        safe = json.loads(safe)
+    assert safe.endswith(suffix)
+    assert json.loads(safe.removesuffix(suffix)) == {
+        key: "[REDACTED]" if key == "password" else "password=[REDACTED]",
+        "count": 7,
+    }

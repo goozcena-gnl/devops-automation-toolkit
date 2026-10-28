@@ -245,3 +245,38 @@ def test_collision_names_do_not_bypass_archive_path_guards(tmp_path: Path, unsaf
             "tests failed one",
         }
     assert not (tmp_path / "outside.log").exists()
+
+
+def test_quoted_key_filename_collisions_keep_stable_direct_references() -> None:
+    # Direct callers may supply POSIX names that cannot be created on Windows.
+    raw = {
+        f"'password':prefix;CANARY_{index}.log": f"tests failed job {index}" for index in range(3)
+    }
+    safe = _sanitize_logs(raw)
+    assert len(safe) == len(raw)
+    assert "CANARY" not in json.dumps(safe)
+    assert _sanitize_logs(safe) == safe
+    assert Redactor().redact_data(safe) == safe
+    assert _sanitize_logs(dict(reversed(list(raw.items())))) == safe
+    findings, _, timeline = analyze_logs(safe)
+    assert {finding.resource.name for finding in findings} == set(safe)
+    assert {finding.evidence.location for finding in findings} == set(safe)
+    assert {item["source"] for item in timeline} == set(safe)
+
+
+def test_malformed_json_names_keep_collision_and_evidence_references() -> None:
+    # Direct provider callers can return names that Windows cannot create locally.
+    raw = {
+        f'"password":"CANARY_HEAD_{index}",CANARY_TAIL_{index}': f"tests failed job {index}"
+        for index in range(3)
+    }
+    safe = _sanitize_logs(raw)
+    assert len(safe) == len(raw)
+    assert "CANARY" not in json.dumps(safe)
+    assert _sanitize_logs(safe) == safe
+    assert Redactor().redact_data(safe) == safe
+    assert len({name.casefold() for name in safe}) == len(raw)
+    findings, _, timeline = analyze_logs(safe)
+    assert {finding.resource.name for finding in findings} == set(safe)
+    assert {finding.evidence.location for finding in findings} == set(safe)
+    assert {item["source"] for item in timeline} == set(safe)

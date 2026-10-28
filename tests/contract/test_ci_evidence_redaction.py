@@ -167,3 +167,63 @@ def test_shell_segments_keep_schema_and_evidence_locations(
         validator.validate(bundled)
         assert bundled == report.as_dict()
         assert "SYNTHETIC_P1" not in archive.read("logs/ordinary.log").decode("utf-8")
+
+
+@pytest.mark.parametrize("direct", [False, True])
+def test_provider_punctuation_preserves_export_contracts(
+    repository_root: Path,
+    punctuation_ci_inputs: tuple[Path, Path, dict[str, str], list[str]],
+    tmp_path: Path,
+    direct: bool,
+) -> None:
+    source, metadata_path, raw_logs, fragments = punctuation_ci_inputs
+    report, logs, metadata = build_report(logs_dir=source, metadata_path=metadata_path)
+    if direct:
+        findings, counts, timeline = analyze_logs(raw_logs)
+        report.findings = findings
+        report.extensions.update(signature_counts=counts, timeline=timeline)
+        report = type(report).model_validate(report.as_dict())
+    redactor = Redactor()
+    assert redactor.redact_data(report.as_dict()) == report.as_dict()
+    assert redactor.redact_data(logs) == logs
+    names = set(logs)
+    assert names == set(report.extensions["log_files"])
+    assert len(names) == len(raw_logs)
+    assert {item["source"] for item in report.extensions["timeline"]} == names
+    for finding in report.findings:
+        if finding.resource.type != "CILog":
+            continue
+        name = finding.resource.name
+        assert name == finding.resource.identifier == finding.evidence.location
+        assert finding.evidence.summary == logs[name].splitlines()[finding.evidence.line - 1]
+    assert {content.count("\n") for content in logs.values()} == {
+        content.count("\n") for content in raw_logs.values()
+    }
+    schema_dir = repository_root / "configs/schemas"
+    finding_schema = json.loads((schema_dir / "finding.schema.json").read_text())
+    registry = Registry().with_resource(
+        "finding.schema.json", Resource.from_contents(finding_schema)
+    )
+    validator = Draft202012Validator(
+        json.loads((schema_dir / "report.schema.json").read_text()), registry=registry
+    )
+    validator.validate(report.as_dict())
+    assert report.schema_version == "1.0"
+    assert report.status.value == "fail"
+    assert report.extensions["run"]["ordinary"] == [7, True, None]
+    bundle = tmp_path / "provider-punctuation.zip"
+    write_bundle(bundle, report, raw_logs if direct else logs, metadata)
+    surfaces = [report.model_dump_json(), json.dumps(metadata), *logs, *logs.values()]
+    surfaces.extend(render_report(report, fmt, color=False) for fmt in ReportFormat)
+    with zipfile.ZipFile(bundle) as archive:
+        members = archive.namelist()
+        assert len(members) == len(set(members)) == len(raw_logs) + 2
+        assert {name.removeprefix("logs/") for name in members if name.startswith("logs/")} == names
+        bundled = json.loads(archive.read("report.json"))
+        validator.validate(bundled)
+        assert bundled == report.as_dict()
+        for name in names:
+            assert archive.read("logs/" + name).decode("utf-8") == logs[name]
+        surfaces.extend(members)
+        surfaces.extend(archive.read(name).decode("utf-8") for name in members)
+    assert all(fragment not in surface for fragment in fragments for surface in surfaces)

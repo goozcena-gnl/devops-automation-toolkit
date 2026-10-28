@@ -75,3 +75,28 @@ def test_shell_segments_are_sanitized_in_both_subprocess_streams(
     result = run_command([sys.executable, "-V"])
     assert result.stdout == result.stderr == 'password="[REDACTED]"; ordinary'
     assert result.returncode == (124 if timeout else 0)
+
+
+@pytest.mark.parametrize("timeout", [False, True])
+@pytest.mark.parametrize("encoded", [False, True])
+def test_provider_punctuation_is_sanitized_in_both_subprocess_streams(
+    monkeypatch: pytest.MonkeyPatch, timeout: bool, encoded: bool
+) -> None:
+    output = "password=CANARY_HEAD&CANARY_TAIL; ordinary\ntoken=CANARY_OTHER|CANARY_END"
+    if encoded:
+        output = json.dumps({"message": output, "ordinary": 7})
+
+    def execute(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if timeout:
+            raise subprocess.TimeoutExpired(["synthetic"], 1, output=output, stderr=output)
+        return subprocess.CompletedProcess(["synthetic"], 0, output, output)
+
+    monkeypatch.setattr(subprocess, "run", execute)
+    result = run_command([sys.executable, "-V"])
+    assert result.returncode == (124 if timeout else 0)
+    for stream in [result.stdout, result.stderr]:
+        assert "CANARY" not in stream
+        message = json.loads(stream)["message"] if encoded else stream
+        assert message == "password=[REDACTED]; ordinary\ntoken=[REDACTED]"
+        if encoded:
+            assert json.loads(stream)["ordinary"] == 7
