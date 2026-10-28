@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import zipfile
 from collections import Counter
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from devops_toolkit.core.exceptions import (
@@ -221,23 +221,38 @@ def _sanitize_logs(logs: dict[str, str]) -> dict[str, str]:
     redactor = Redactor()
     sanitized: dict[str, str] = {}
     names = {filename: redactor.redact(filename) for filename in logs}
-    reserved = {name.casefold() for name in names.values()}
-    used: set[str] = set()
+    reserved = {PureWindowsPath(name.casefold()) for name in names.values()}
+    reserved_dirs = {parent for path in reserved for parent in path.parents}
+    used: set[PureWindowsPath] = set()
+    used_dirs: set[PureWindowsPath] = set()
+
+    def conflicts(
+        name: str, files: set[PureWindowsPath], directories: set[PureWindowsPath]
+    ) -> bool:
+        path = PureWindowsPath(name.casefold())
+        return (
+            path in files or path in directories or any(parent in files for parent in path.parents)
+        )
+
     # Keep already-safe names, then assign colliding inputs in a stable order.
     for filename in sorted(logs, key=lambda item: (item != names[item], item)):
         name = names[filename]
-        if name.casefold() in used:
+        if conflicts(name, used, used_dirs):
             digest = fingerprint_sensitive(filename, namespace="ci-log-name").removeprefix(
                 "sha256:"
             )
             suffix = 1
             # A suffix would be consumed as part of a bare credential value.
             candidate = f"{digest}.{name}"
-            while candidate.casefold() in used or candidate.casefold() in reserved:
+            while conflicts(candidate, used, used_dirs) or conflicts(
+                candidate, reserved, reserved_dirs
+            ):
                 candidate = f"{digest}.{suffix}.{name}"
                 suffix += 1
             name = candidate
-        used.add(name.casefold())
+        path = PureWindowsPath(name.casefold())
+        used.add(path)
+        used_dirs.update(path.parents)
         sanitized[name] = redactor.redact(logs[filename])
     return sanitized
 

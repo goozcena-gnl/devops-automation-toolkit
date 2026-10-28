@@ -28,9 +28,11 @@ log names are sanitized; distinct files that sanitize to the same name retain
 separate entries using a non-reversible digest prefix placed before the sanitized
 name. These identifiers stay unchanged through repeated redaction, so report
 references identify the same log members in the ZIP. Names already present are
-reserved before disambiguation; case-insensitive collision checks prevent
-overwrites on Windows as well as POSIX hosts. Ordinary non-colliding names are
-unchanged.
+reserved before disambiguation, including their parent directories.
+Case-insensitive collision checks handle both identical names and files that
+would occupy another log's ancestor directory, preventing overwrites or failed
+bundle writes on Windows as well as POSIX hosts. Ordinary non-colliding names
+are unchanged.
 
 Plain provider logs do not establish shell syntax. Punctuation such as `&`, `|`,
 `(`, `)`, `<`, `>` and `;` immediately adjacent to a credential remains part of
@@ -42,6 +44,9 @@ valid JSON: sensitive malformed fragments, including adjacent commas or closing
 brackets/braces and their suffixes, are consumed conservatively. This applies
 again to decoded strings inside otherwise valid JSON. Malformed source text
 is not repaired into JSON; rendered reports still follow schema 1.0.
+Malformed quoted prefixes, including invalid JSON escapes, do not exempt a
+following credential assignment from redaction. Only assignments contained
+inside valid strings already inspected in decoded form can be exempted.
 This can also hide an adjacent command or diagnostic when its boundary is
 ambiguous: complete credential masking takes precedence over that context.
 Whitespace still separates unquoted log values; quote values containing spaces

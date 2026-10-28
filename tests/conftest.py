@@ -48,8 +48,10 @@ def structured_ci_inputs(tmp_path: Path) -> tuple[Path, Path, list[str]]:
     return logs, metadata, secrets
 
 
-@pytest.fixture
-def collision_ci_inputs(tmp_path: Path) -> tuple[Path, Path, dict[str, str], list[str]]:
+@pytest.fixture(params=["identical", "ancestor-malformed-prefix"])
+def collision_ci_inputs(
+    tmp_path: Path, request: pytest.FixtureRequest
+) -> tuple[Path, Path, dict[str, str], list[str]]:
     logs = tmp_path / "collision-logs"
     logs.mkdir()
     secrets = [f"CANARY{index}" for index in range(4)]
@@ -60,6 +62,25 @@ def collision_ci_inputs(tmp_path: Path) -> tuple[Path, Path, dict[str, str], lis
         for index, secret in enumerate(secrets)
     }
     raw_logs["ordinary/plain.log"] = "exit code 137 ordinary job\n"
+    if request.param == "ancestor-malformed-prefix":
+        secrets.append("CANARY_PREFIX_BYPASS")
+        content = (
+            r'exit code 137 tests failed path="C:\work" '
+            '{"password":"CANARY_PREFIX_BYPASS","count":7}'
+            "\n"
+            'tests failed path="unmatched {"password":"CANARY_PREFIX_BYPASS","count":7}'
+            "\nexit code 137\n"
+        )
+        for _ in range(3):
+            content += json.dumps({"message": content, "ordinary": [7, True, None]}) + "\n"
+        raw_logs.update(
+            {
+                "token=CANARY0 data/child.log": content,
+                "token=CANARY1 data": content,
+                "nested/token=CANARY2 DATA/child.log": content,
+                "nested/token=CANARY3 data": content,
+            }
+        )
     for name, content in raw_logs.items():
         path = logs / name
         path.parent.mkdir(parents=True, exist_ok=True)

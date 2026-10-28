@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from hashlib import sha256
 from re import Pattern
@@ -41,7 +41,9 @@ _ASSIGNMENT = re.compile(
     re.IGNORECASE,
 )
 _QUOTE = re.compile(r"""\\*["']""")
-_JSON_STRING = re.compile(r'(?<!\\)"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"')
+# Consume invalid escapes too, so a malformed string's closing quote is not
+# mistaken for the opening quote of the next string. Validate before trusting it.
+_JSON_STRING = re.compile(r'(?<!\\)"(?:[^"\\\x00-\x1f]|\\[^\x00-\x1f])*"')
 _JSON_TOKEN = re.compile(_JSON_STRING.pattern + r"|[{}\[\]]")
 _SEPARATED_OPERATOR = re.compile(r"[;|&<>()]+(?=[ \t\r\n])")
 
@@ -75,6 +77,15 @@ def _verified_json_spans(text: str) -> list[tuple[int, int]]:
     return spans
 
 
+def _valid_json_strings(text: str) -> Iterator[tuple[re.Match[str], str]]:
+    for match in _JSON_STRING.finditer(text):
+        try:
+            decoded = json.loads(match[0])
+        except ValueError:
+            continue
+        yield match, decoded
+
+
 def _redact_json_strings(text: str, sanitize: Callable[[str], str]) -> str:
     """Decode JSON string tokens before inspecting their embedded log text."""
 
@@ -82,14 +93,13 @@ def _redact_json_strings(text: str, sanitize: Callable[[str], str]) -> str:
     previous = 0
     spans = iter(_verified_json_spans(text))
     span = next(spans, None)
-    for match in _JSON_STRING.finditer(text):
+    for match, decoded in _valid_json_strings(text):
         if match.start() < previous:
             continue
         end = match.end()
         while span is not None and span[1] <= match.start():
             span = next(spans, None)
         verified = span is not None and span[0] <= match.start() and end <= span[1]
-        decoded = json.loads(match[0])
         safe = sanitize(decoded)
         if (
             (
@@ -260,7 +270,7 @@ def _replacement_token(replacement: str, delimiter: str, *, closed: bool = True)
 def _redact_assignments(text: str, replacement: str) -> str:
     parts: list[str] = []
     previous = 0
-    strings = iter(_JSON_STRING.finditer(text))
+    strings = (match for match, _ in _valid_json_strings(text))
     token = next(strings, None)
     spans = iter(_verified_json_spans(text))
     span = next(spans, None)
@@ -269,8 +279,9 @@ def _redact_assignments(text: str, replacement: str) -> str:
             continue
         while token is not None and token.end() <= match.start():
             token = next(strings, None)
-        if token is not None and token.start() < match.start():
-            # Complete string tokens, including embedded keys, were sanitized decoded.
+        if token is not None and token.start() < match.start() and match.end() <= token.end() - 1:
+            # A complete key/separator inside a valid decoded string was
+            # inspected with its value (or empty tail); crossing its boundary was not.
             continue
         delimiter = match["quoted"]
         if not _assignment_is_sensitive(match):

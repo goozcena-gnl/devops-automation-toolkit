@@ -17,6 +17,93 @@ from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive
 from devops_toolkit.reporters.dispatcher import ReportFormat, render_report
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize(
+    ("child", "parent"),
+    [
+        ("token=CANARY0 data/child.log", "token=CANARY1 data"),
+        ("token=CANARY0 DATA/nested/child.log", "token=CANARY1 data"),
+        ("ordinary/token=CANARY0 data/nested/child.log", "ordinary/token=CANARY1 data"),
+        ("ordinary/Parent/child.log", "ordinary/parent"),
+    ],
+)
+def test_ancestor_collisions_are_stable_and_archiveable(
+    tmp_path: Path, child: str, parent: str, reverse: bool
+) -> None:
+    raw = {child: "tests failed child", parent: "tests failed parent"}
+    raw["unchanged/nested/job.log"] = "tests failed ordinary"
+    if reverse:
+        raw = dict(reversed(list(raw.items())))
+    safe = _sanitize_logs(raw)
+    assert safe["unchanged/nested/job.log"] == raw["unchanged/nested/job.log"]
+    assert len(safe) == len(raw)
+    assert set(safe.values()) == set(raw.values())
+    assert "CANARY" not in json.dumps(safe)
+    assert _sanitize_logs(dict(reversed(list(raw.items())))) == safe
+    for _ in range(3):
+        assert _sanitize_logs(safe) == safe
+        assert Redactor().redact_data(safe) == safe
+    paths = [PureWindowsPath(name.lower()) for name in safe]
+    assert len(set(paths)) == len(paths)
+    assert all(other not in path.parents for path in paths for other in paths)
+    for name in safe:
+        for path_type in [PurePosixPath, PureWindowsPath]:
+            assert not path_type(name).is_absolute()
+            assert ".." not in path_type(name).parts
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "ordinary.log").write_text("tests failed", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    findings, counts, timeline = analyze_logs(raw)
+    report.findings = findings
+    report.extensions.update(log_files=sorted(safe), signature_counts=counts, timeline=timeline)
+    report = type(report).model_validate(report.as_dict())
+    bundle = tmp_path / "ancestor.zip"
+    write_bundle(bundle, report, raw, {})
+    assert {finding.resource.name for finding in findings} == set(safe)
+    assert {finding.resource.identifier for finding in findings} == set(safe)
+    assert {finding.evidence.location for finding in findings} == set(safe)
+    assert {item["source"] for item in timeline} == set(safe)
+    with zipfile.ZipFile(bundle) as archive:
+        assert json.loads(archive.read("report.json")) == report.as_dict()
+        assert {name[5:] for name in archive.namelist() if name.startswith("logs/")} == set(safe)
+        for name, content in safe.items():
+            assert archive.read("logs/" + name).decode("utf-8") == content
+
+
+def test_requested_ancestor_collision_bundle_reproduction(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    raw = {
+        "token=CANARY0 data/child.log": "exit code 137 child",
+        "token=CANARY1 data": "exit code 137 parent",
+    }
+    for name, content in raw.items():
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+    report, logs, metadata = build_report(logs_dir=source)
+    write_bundle(tmp_path / "requested.zip", report, logs, metadata)
+
+
+@pytest.mark.parametrize("reserved_tail", ["", "/child.log/nested.log"])
+def test_ancestor_disambiguation_reserves_existing_digest_paths(reserved_tail: str) -> None:
+    child = "token=CANARY1 data/child.log"
+    digest = fingerprint_sensitive(child, namespace="ci-log-name").removeprefix("sha256:")
+    reserved = f"{digest}.token=[REDACTED] data{reserved_tail}"
+    raw = {
+        "token=CANARY0 data": "tests failed parent",
+        child: "tests failed child",
+        reserved: "tests failed reserved",
+    }
+    safe = _sanitize_logs(raw)
+    assert safe[reserved] == raw[reserved]
+    assert len(safe) == len(raw)
+    paths = [PureWindowsPath(name.casefold()) for name in safe]
+    assert all(other not in path.parents for path in paths for other in paths)
+    assert _sanitize_logs(safe) == safe
+    assert _sanitize_logs(dict(reversed(list(raw.items())))) == safe
+
+
 def test_ci_log_analysis_deduplicates_and_classifies() -> None:
     findings, counts, timeline = analyze_logs(
         {"job.log": "tests failed\ntests failed\nexit code 137"}

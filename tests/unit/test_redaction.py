@@ -25,6 +25,60 @@ def test_redacts_common_credentials() -> None:
     assert "[REDACTED]" in result
 
 
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        r'path="C:\work" ',
+        'path="unmatched ',
+        r'path="bad\qescape" ',
+        'path="truncated\\',
+        r'path="bad\u12" ',
+    ],
+)
+@pytest.mark.parametrize("depth", [0, 1, 2, 3])
+def test_malformed_prefix_cannot_hide_credential_assignments(prefix: str, depth: int) -> None:
+    text = (
+        "tests failed " + prefix + '{"password":"CANARY_PREFIX_BYPASS tail","count":7}'
+        "\nordinary context\nexit code 137"
+    )
+    for _ in range(depth):
+        text = json.dumps({"message": text, "ordinary": [7, True, None]})
+    redactor = Redactor()
+    safe = redactor.redact(text)
+    for _ in range(3):
+        assert "CANARY" not in safe
+        assert "BYPASS" not in safe
+        assert "tail" not in safe
+        assert safe.count("\n") == text.count("\n")
+        assert redactor.redact(safe) == safe
+        safe = redactor.redact(safe)
+    for _ in range(depth):
+        decoded = json.loads(safe)
+        assert decoded["ordinary"] == [7, True, None]
+        safe = decoded["message"]
+    assert safe.splitlines()[1:] == ["ordinary context", "exit code 137"]
+
+
+def test_valid_enclosing_json_after_windows_path_preserves_fields() -> None:
+    text = r'tests failed path="C:\work" {"password":"CANARY_PREFIX_BYPASS","count":7}'
+    safe = Redactor().redact(text)
+    assert json.loads(safe[safe.index("{") :]) == {"password": "[REDACTED]", "count": 7}
+
+
+def test_long_malformed_prefix_remains_bounded() -> None:
+    text = r'path="bad\q' + "ordinary" * 10_000 + '" {"password":"CANARY_PREFIX_BYPASS"}'
+    assert "CANARY" not in Redactor().redact(text)
+
+
+@pytest.mark.parametrize("message", ["token=", "password=", '"password":', "token= "])
+@pytest.mark.parametrize("depth", [0, 1, 2, 3])
+def test_empty_assignments_inside_valid_strings_remain_unchanged(message: str, depth: int) -> None:
+    text = json.dumps({"message": message, "ordinary": [7, True, None]})
+    for _ in range(depth):
+        text = json.dumps(text)
+    assert Redactor().redact(text) == text
+
+
 def test_redacts_private_key_block() -> None:
     value = "-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----"
     result = Redactor().redact(value)
