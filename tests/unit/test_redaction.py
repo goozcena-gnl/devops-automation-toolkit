@@ -9,6 +9,76 @@ from devops_toolkit.core.logging import RedactingFilter
 from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive
 
 
+@pytest.mark.parametrize("separator", ["\n", "\r\n", "\u2028", "\u2029", "\x85"])
+@pytest.mark.parametrize("ensure_ascii", [False, True])
+@pytest.mark.parametrize("array", [False, True])
+def test_pem_redaction_preserves_json_syntax_and_physical_lines(
+    separator: str, ensure_ascii: bool, array: bool
+) -> None:
+    lines = ["-----BEGIN PRIVATE KEY-----", "CANARY_KEY", "-----END PRIVATE KEY-----"]
+    pem = separator.join(lines)
+    payload = {
+        "message": ["prefix " + lines[0], lines[1], lines[2] + " suffix"] if array else pem,
+        "ordinary": [7, True, None, "keep diagnostic"],
+    }
+    text = json.dumps(payload, ensure_ascii=ensure_ascii, indent=2)
+    redactor = Redactor()
+    safe = redactor.redact(text)
+    decoded = json.loads(safe)
+    assert decoded["ordinary"] == payload["ordinary"]
+    assert "CANARY" not in safe
+    assert "PRIVATE KEY" not in safe
+    if array:
+        assert decoded["message"][0].startswith("prefix ")
+        assert decoded["message"][-1].endswith(" suffix")
+    assert len(safe.splitlines()) == len(text.splitlines())
+    assert redactor.redact(safe) == safe
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "token=https://CANARY_USER:CANARY_PASS@example.invalid/logs",
+        "ordinary/token=https://CANARY_USER:CANARY_PASS:CANARY_TAIL@example.invalid/logs/job.log",
+        "ordinary/https://CANARY_USER:CANARY_PASS@example.invalid/nested/job.log",
+        "https://CANARY_USER:CANARY_PASS@example.invalid/logs",
+        "https://CANARY_USER@example.invalid/logs",
+        "HTTPS://CANARY_USER:CANARY_PASS@CANARY_TAIL@example.invalid/logs",
+    ],
+)
+def test_url_userinfo_is_masked_before_path_components(path: str) -> None:
+    redactor = Redactor()
+    safe = redactor.redact_path(path)
+    assert "CANARY" not in safe
+    assert "example.invalid/logs" in safe or "example.invalid/nested/job.log" in safe
+    for _ in range(3):
+        assert redactor.redact_path(safe) == safe
+        assert redactor.redact(safe) == safe
+    assert redactor.redact_data({"nested": [{"logPath": path}]})["nested"][0]["logPath"] == safe
+
+
+def test_pem_arrays_mask_scalar_material_without_losing_json_context() -> None:
+    text = json.dumps(
+        {
+            "pem": [
+                "prefix -----BEGIN PRIVATE KEY-----",
+                1234567,
+                "-----END PRIVATE KEY----- suffix",
+            ],
+            "count": 7,
+        },
+        indent=2,
+    )
+    safe = Redactor().redact(text)
+    payload = json.loads(safe)
+    assert "1234567" not in safe
+    assert payload["count"] == 7
+    assert payload["pem"][0].startswith("prefix ")
+    assert payload["pem"][-1].endswith(" suffix")
+    assert len(safe.splitlines()) == len(text.splitlines())
+    assert Redactor().redact(safe) == safe
+
+
 @pytest.mark.parametrize("prefix", ["", "CANARY_PREFIX"])
 @pytest.mark.parametrize("quote", ["", "'", '"'])
 @pytest.mark.parametrize("encoded", [False, True])

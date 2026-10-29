@@ -46,6 +46,12 @@ Case-insensitive collision checks handle both identical names and files that
 would occupy another log's ancestor directory, preventing overwrites or failed
 bundle writes on Windows as well as POSIX hosts. Ordinary non-colliding names
 are unchanged.
+Empty identities, current/parent-directory identities, trailing separators and
+other directory-only log names raise `ConfigurationError` before allocation in
+both direct analysis and bundle writing. Collision retries have an explicit
+finite bound derived from the reserved file/directory sets.
+URL userinfo is masked before path components are split, including username-only
+userinfo; credential-bearing URLs cannot lose their scheme before masking.
 
 Direct `write_bundle()` calls use one original-to-sanitized filename mapping for
 ZIP members and the report's `CILog` resource names/identifiers, evidence locations,
@@ -64,8 +70,13 @@ as file paths. Traversal-rejected sources remain excluded from the archive.
 Unavailable log identities use the same collision allocator with actual ZIP names
 reserved, preventing missing evidence from aliasing an archived log. Existing
 unarchived identities remain stable when the bundled report is sanitized again.
+Previous unavailable entries are canonicalized through the same reference mapping,
+sorted and deduplicated, excluding actual archived members. Repeated rejected-source
+references correlate with their existing sanitized identities rather than creating
+additional unavailable evidence.
 Fingerprints are recomputed only when the resource identity changes; benign
 identities and fingerprints remain unchanged.
+This also applies to missing and traversal-rejected `CILog` resources.
 
 Direct Python metadata inputs are normalized before recursive redaction: tuples
 become JSON arrays, `pathlib` paths become component-redacted strings, and dates
@@ -125,3 +136,8 @@ without inserting invalid control characters inside JSON strings.
 Private-key blocks inside bare assignments are consumed together with adjacent
 credential segments before placeholders are inserted, so retained line counts
 cannot separate a credential suffix from its assignment.
+PEM masking within JSON strings uses escaped replacements and places physical-line
+placeholders outside the closing quote. Pretty-printed PEM arrays retain JSON
+punctuation and surrounding nonsecret fields while their key material is removed.
+Literal U+2028/U+2029 and escaped separators remain parseable JSON; plain logs retain
+their original physical evidence-line correspondence.

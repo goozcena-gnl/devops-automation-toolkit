@@ -239,11 +239,23 @@ def _collect_log_files(root: Path, *, max_file_bytes: int, max_total_bytes: int)
     return _sanitize_logs(collected)
 
 
+def _validate_log_identity(filename: str) -> None:
+    path = PureWindowsPath(filename)
+    if (
+        path.name in {"", ".."}
+        or filename.endswith(("/", "\\"))
+        or filename.replace("\\", "/").endswith("/.")
+    ):
+        raise ConfigurationError("Invalid CI log identity: require a filename, not a directory")
+
+
 def _log_filename_mapping(
     logs: dict[str, str], *, reserved_names: set[str] | None = None
 ) -> dict[str, str]:
     redactor = Redactor()
     sanitized: dict[str, str] = {}
+    for filename in logs:
+        _validate_log_identity(filename)
     names = {
         filename: PureWindowsPath(redactor.redact_path(filename)).as_posix() for filename in logs
     }
@@ -268,14 +280,18 @@ def _log_filename_mapping(
             digest = fingerprint_sensitive(filename, namespace="ci-log-name").removeprefix(
                 "sha256:"
             )
-            suffix = 1
             # A suffix would be consumed as part of a bare credential value.
             candidate = f"{digest}.{name}"
-            while conflicts(candidate, used, used_dirs) or conflicts(
-                candidate, reserved, reserved_dirs
+            for suffix in range(
+                1, len(used) + len(used_dirs) + len(reserved) + len(reserved_dirs) + 2
             ):
+                if not conflicts(candidate, used, used_dirs) and not conflicts(
+                    candidate, reserved, reserved_dirs
+                ):
+                    break
                 candidate = f"{digest}.{suffix}.{name}"
-                suffix += 1
+            else:
+                raise ConfigurationError("Unable to allocate a unique sanitized CI log identity")
             name = candidate
         path = PureWindowsPath(name.casefold())
         used.add(path)
@@ -295,7 +311,6 @@ def _sanitize_logs(logs: dict[str, str]) -> dict[str, str]:
 def _map_report_log_references(
     report_data: dict[str, Any], names: dict[str, str], log_sources: dict[str, str]
 ) -> None:
-    redactor = Redactor()
     references = {name: name for name in names.values()}
     references.update(names)
     unarchived: dict[str, str] = {}
@@ -303,11 +318,7 @@ def _map_report_log_references(
     existing = extensions.get("unarchived_log_files", [])
     if not isinstance(existing, (list, tuple)):
         raise ConfigurationError("Invalid CI report: unarchived_log_files must be an array")
-    previous = list(existing)
-    previous_names = {item for item in previous if isinstance(item, str)}
-    for source in previous_names:
-        if redactor.redact_path(source) == source:
-            references.setdefault(source, source)
+    previous_names = {item for item in existing if isinstance(item, str)}
 
     def declare_log(value: Any) -> None:
         if isinstance(value, str) and value not in references:
@@ -315,6 +326,11 @@ def _map_report_log_references(
 
     for source in log_sources:
         declare_log(source)
+    rejected = _log_filename_mapping(unarchived, reserved_names=set(names.values()))
+    references.update(rejected)
+    for canonical in rejected.values():
+        references.setdefault(canonical, canonical)
+    unarchived = {}
     for source in previous_names:
         declare_log(source)
     if isinstance(extensions.get("log_files"), (list, tuple)):
@@ -326,7 +342,9 @@ def _map_report_log_references(
             declare_log(resource["name"])
             declare_log(resource.get("identifier"))
             declare_log(finding["evidence"].get("location"))
-    unarchived = _log_filename_mapping(unarchived, reserved_names=set(names.values()))
+    unarchived = _log_filename_mapping(
+        unarchived, reserved_names=set(names.values()) | set(rejected.values())
+    )
     references.update(unarchived)
     for finding in report_data["findings"]:
         resource = finding.get("resource")
@@ -335,7 +353,7 @@ def _map_report_log_references(
             for key in ("name", "identifier"):
                 if resource.get(key) in references:
                     resource[key] = references[resource[key]]
-            if original in names and resource["name"] != original:
+            if resource["name"] != original:
                 finding["fingerprint"] = ""
         evidence = finding["evidence"]
         if evidence.get("location") in references:
@@ -349,15 +367,17 @@ def _map_report_log_references(
         for item in extensions["timeline"]:
             if isinstance(item, dict) and isinstance(item.get("source"), str):
                 item["source"] = references.get(item["source"], item["source"])
-    if unarchived:
-        extensions["unarchived_log_files"] = [
-            *previous,
-            *(
-                unarchived[source]
-                for source in sorted(unarchived)
-                if unarchived[source] not in previous_names
-            ),
-        ]
+    if unarchived or rejected or existing:
+        archived = set(names.values())
+        extensions["unarchived_log_files"] = sorted(
+            (
+                {references[source] for source in previous_names}
+                | set(rejected.values())
+                | set(unarchived.values())
+            )
+            - archived
+        )
+    if extensions.get("unarchived_log_files"):
         report_data["metadata"]["partial"] = True
 
 
@@ -458,6 +478,8 @@ def write_bundle(
     """
     redactor = Redactor()
     safe_metadata = _sanitize_metadata(metadata)
+    for filename in logs:
+        _validate_log_identity(filename)
     relative_logs = {
         filename: content
         for filename, content in logs.items()

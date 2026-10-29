@@ -6,6 +6,7 @@ import json
 import math
 import re
 import shlex
+from bisect import bisect_right
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -64,10 +65,67 @@ def _preserve_line_breaks(original: str, replacement: str) -> str:
 
 
 def _sub_preserving_line_breaks(pattern: Pattern[str], replacement: str, text: str) -> str:
+    if pattern is _PRIVATE_KEY:
+        return _redact_private_keys(text, replacement)
+
     def replace(match: re.Match[str]) -> str:
         return _preserve_line_breaks(match[0], match.expand(replacement))
 
     return pattern.sub(replace, text)
+
+
+def _redact_private_keys(text: str, replacement: str) -> str:
+    if not _PRIVATE_KEY.search(text):
+        return text
+    strings = [match for match, _ in _valid_json_strings(text)]
+    starts = [match.start() for match in strings]
+    containers = _verified_json_spans(text)
+    token_edits: dict[int, list[tuple[int, int, str]]] = {}
+    edits: list[tuple[int, int, str]] = []
+    for pem in _PRIVATE_KEY.finditer(text):
+        first = bisect_right(starts, pem.start()) - 1
+        last = bisect_right(starts, pem.end() - 1) - 1
+        in_strings = (
+            first >= 0
+            and strings[first].start() < pem.start() < strings[first].end() - 1
+            and strings[last].start() < pem.end() <= strings[last].end() - 1
+        )
+        if not in_strings or (
+            first != last
+            and not any(start <= pem.start() and pem.end() <= end for start, end in containers)
+        ):
+            edits.append((pem.start(), pem.end(), _preserve_line_breaks(pem[0], replacement)))
+            continue
+        for index in range(first, last + 1):
+            token = strings[index]
+            start = max(pem.start(), token.start() + 1)
+            end = min(pem.end(), token.end() - 1)
+            decoded = json.loads('"' + text[start:end] + '"')
+            safe = json.dumps(_preserve_line_breaks(decoded, replacement))[1:-1]
+            token_edits.setdefault(index, []).append((start, end, safe))
+            if index < last:
+                gap_start, gap_end = token.end(), strings[index + 1].start()
+                # Preserve JSON punctuation, but not scalar key material in a PEM array.
+                gap = re.sub(
+                    r"[^\s,\[\]{}:]+", lambda _: json.dumps(replacement), text[gap_start:gap_end]
+                )
+                edits.append((gap_start, gap_end, gap))
+    for index, replacements in token_edits.items():
+        token = strings[index]
+        parts: list[str] = []
+        previous = token.start()
+        for start, end, safe in replacements:
+            parts.extend((text[previous:start], safe))
+            previous = end
+        parts.append(text[previous : token.end()])
+        edits.append((token.start(), token.end(), _preserve_line_breaks(token[0], "".join(parts))))
+    parts = []
+    previous = 0
+    for start, end, safe in sorted(edits):
+        parts.extend((text[previous:start], safe))
+        previous = end
+    parts.append(text[previous:])
+    return "".join(parts)
 
 
 def _verified_json_spans(text: str) -> list[tuple[int, int]]:
@@ -361,7 +419,7 @@ DEFAULT_RULES: tuple[RedactionRule, ...] = (
     ),
     RedactionRule(
         "credential-url",
-        re.compile(r"(?P<scheme>https?://)(?P<user>[^\s:/@]+):(?P<pwd>[^\s/@]+)@"),
+        re.compile(r"""(?P<scheme>https?://)[^\s/"']+@""", re.IGNORECASE),
         r"\g<scheme>[REDACTED]@",
     ),
 )
@@ -384,6 +442,7 @@ class Redactor:
         redacted = value
         if _PRIVATE_KEY.search(redacted):
             # Mask the whole assignment before block placeholders can split its tail.
+            redacted = _redact_json_strings(redacted, self._redact_default_literal)
             redacted = _redact_assignments(redacted, self._replacement)
         for rule in self._rules:
             replacement = rule.replacement
@@ -400,6 +459,7 @@ class Redactor:
         """Inspect a decoded JSON string using only built-in credential rules."""
         redacted = value
         if _PRIVATE_KEY.search(redacted):
+            redacted = _redact_json_strings(redacted, self._redact_default_literal)
             redacted = _redact_assignments(redacted, self._replacement)
         for rule in DEFAULT_RULES:
             replacement = rule.replacement
@@ -473,6 +533,8 @@ class Redactor:
 
     def redact_path(self, value: str) -> str:
         """Mask credentials through each component, not just its first whitespace."""
+        url_rule = DEFAULT_RULES[-1]
+        value = url_rule.pattern.sub(url_rule.replacement, value)
         parts = re.split(r"([/\\])", value)
         for index in range(0, len(parts), 2):
             component = parts[index]

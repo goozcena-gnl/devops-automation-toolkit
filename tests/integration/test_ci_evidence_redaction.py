@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -72,15 +73,37 @@ def test_invalid_provider_metadata_cli_is_controlled(tmp_path: Path, value: str)
         payload = "[]" if value == "root" else '{"id":7}'
     run.write_text(payload, encoding="utf-8")
     jobs.write_text('{"jobs":{}}' if value == "jobs" else '{"jobs":[]}', encoding="utf-8")
-    gh = bin_dir / "gh"
-    gh.write_text(
+    calls = tmp_path / "fake-gh-calls.txt"
+    script = (
         f"#!{sys.executable}\n"
         "import pathlib, sys\n"
+        f"with pathlib.Path({str(calls)!r}).open('a', encoding='utf-8') as calls:\n"
+        "    calls.write(sys.argv[-1] + '\\n')\n"
         f"source = {str(jobs)!r} if '/jobs?' in sys.argv[-1] else {str(run)!r}\n"
-        "print(pathlib.Path(source).read_text(encoding='utf-8'))\n",
-        encoding="utf-8",
+        "print(pathlib.Path(source).read_text(encoding='utf-8'))\n"
     )
-    gh.chmod(0o700)
+    if os.name == "nt":
+        # A real Windows executable avoids cmd.exe metacharacter parsing of
+        # the API URL, e.g. ?filter=all&per_page=100.
+        from pip._vendor.distlib.scripts import ScriptMaker
+
+        fake = bin_dir / "fake_gh.py"
+        fake.write_text(
+            "def main():\n" + "".join(f"    {line}\n" for line in script.splitlines()[1:]),
+            encoding="utf-8",
+        )
+        maker = ScriptMaker(None, str(bin_dir))
+        maker.executable = sys.executable
+        maker.variants = {""}
+        [launcher] = maker.make("gh = fake_gh:main")
+        gh = Path(launcher)
+    else:
+        gh = bin_dir / "gh"
+        gh.write_text(script, encoding="utf-8")
+        gh.chmod(0o700)
+    discovered = shutil.which("gh", path=str(bin_dir))
+    assert discovered is not None
+    assert os.path.samefile(discovered, gh)
     bundle = tmp_path / "provider.zip"
     result = subprocess.run(
         [
@@ -96,7 +119,11 @@ def test_invalid_provider_metadata_cli_is_controlled(tmp_path: Path, value: str)
             str(bundle),
             "--no-color",
         ],
-        env={**os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ.get("PATH", "")},
+        env={
+            **os.environ,
+            "PATH": str(bin_dir),
+            "PYTHONPATH": str(bin_dir) + os.pathsep + os.environ.get("PYTHONPATH", ""),
+        },
         capture_output=True,
         text=True,
         timeout=30,
@@ -107,6 +134,10 @@ def test_invalid_provider_metadata_cli_is_controlled(tmp_path: Path, value: str)
     assert "CANARY" not in result.stdout + result.stderr
     assert "Traceback" not in result.stdout + result.stderr
     assert not bundle.exists()
+    assert calls.read_text(encoding="utf-8").splitlines() == [
+        "repos/synthetic/repository/actions/runs/7",
+        "repos/synthetic/repository/actions/runs/7/jobs?filter=all&per_page=100",
+    ]
 
 
 @pytest.mark.integration
@@ -124,7 +155,7 @@ def test_invalid_provider_metadata_cli_is_controlled(tmp_path: Path, value: str)
             ["job.log"],
         ),
         ("4406286098", "exit code 137", ["job.log"]),
-        (
+        pytest.param(
             "4406286152",
             "exit code 137",
             [
@@ -133,6 +164,9 @@ def test_invalid_provider_metadata_cli_is_controlled(tmp_path: Path, value: str)
                 "ordinary/token=CANARY_HEAD\tCANARY_TAIL/child.log",
                 'ordinary/"password":"CANARY_HEAD CANARY_TAIL".log',
             ],
+            marks=pytest.mark.skipif(
+                os.name == "nt", reason="Tabs, quotes and colons require POSIX filesystem names"
+            ),
         ),
         ("4406286200", "exit code 137", ["job.log"]),
         ("4406884173", "exit code 137", ["password=CANARY_DIRECT.log", "[REDACTED].log"]),
@@ -250,6 +284,45 @@ def test_ten_review_discussions_end_to_end(
                 with zipfile.ZipFile(direct) as archive:
                     surfaces.extend(archive.read(name).decode() for name in archive.namelist())
         assert all("CANARY" not in surface for surface in surfaces)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("report_format", ["console", "json", "markdown", "sarif"])
+def test_windows_invalid_names_retain_direct_security_coverage(
+    tmp_path: Path, report_format: str
+) -> None:
+    from devops_toolkit.commands.ci_evidence import analyze_logs, build_report, write_bundle
+    from devops_toolkit.reporters.dispatcher import ReportFormat, render_report
+
+    raw = {
+        "token=CANARY_HEAD\tCANARY_TAIL.log": "exit code 137 one",
+        "token='CANARY_HEAD'CANARY_TAIL/job.log": "exit code 137 two",
+        "ordinary/token=CANARY_HEAD\tCANARY_TAIL/child.log": "exit code 137 three",
+        'ordinary/"password":"CANARY_HEAD CANARY_TAIL".log': "exit code 137 four",
+    }
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "ordinary.log").write_text("exit code 137", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    report.findings, counts, timeline = analyze_logs(raw)
+    names = {finding.resource.name for finding in report.findings}
+    report.extensions = {
+        "log_files": sorted(names),
+        "signature_counts": counts,
+        "timeline": timeline,
+    }
+    bundle = tmp_path / "direct-names.zip"
+    write_bundle(bundle, report, raw, {})
+    surfaces = [render_report(report, ReportFormat(report_format), color=False)]
+    with zipfile.ZipFile(bundle) as archive:
+        assert {name[5:] for name in archive.namelist() if name.startswith("logs/")} == names
+        assert len(names) == len(raw)
+        surfaces.extend(archive.namelist())
+        surfaces.extend(archive.read(name).decode() for name in archive.namelist())
+        for finding in report.findings:
+            assert finding.resource.name == finding.resource.identifier == finding.evidence.location
+            assert archive.namelist().count("logs/" + finding.resource.name) == 1
+    assert all("CANARY" not in surface for surface in surfaces)
 
 
 @pytest.mark.integration

@@ -7,6 +7,30 @@ import pytest
 from devops_toolkit.core.subprocess import run_command
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\r\n"])
+@pytest.mark.parametrize("array", [False, True])
+def test_pem_provider_json_remains_parseable_in_both_streams(
+    monkeypatch: pytest.MonkeyPatch, separator: str, array: bool
+) -> None:
+    lines = ["-----BEGIN PRIVATE KEY-----", "CANARY_KEY", "-----END PRIVATE KEY-----"]
+    output = json.dumps(
+        {"pem": lines if array else separator.join(lines), "ordinary": 7},
+        ensure_ascii=False,
+        indent=2,
+    )
+
+    def execute(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(["synthetic"], 0, output, output)
+
+    monkeypatch.setattr(subprocess, "run", execute)
+    result = run_command([sys.executable, "-V"])
+    assert result.succeeded
+    for stream in [result.stdout, result.stderr]:
+        assert json.loads(stream)["ordinary"] == 7
+        assert "CANARY" not in stream
+        assert len(stream.splitlines()) == len(output.splitlines())
+
+
 def test_safe_command_execution_and_redaction() -> None:
     script = "print('password=synthetic-value')"
     result = run_command([sys.executable, "-c", script], timeout_seconds=5)

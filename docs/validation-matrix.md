@@ -48,3 +48,16 @@ retain the safe replacement fallback. All `splitlines()` separators are covered 
 `test_every_splitlines_boundary_survives_credential_masking` and
 `test_cli_preserves_all_original_evidence_line_boundaries`.
 These are synthetic local/fake-provider tests, not live GitHub-provider validation.
+
+The seven-follow-up regressions separately exercise timeout-bounded rejection of
+directory-only identities; JSON-safe PEM strings/arrays and subprocess output;
+URL userinfo before path masking; missing-log fingerprint recomputation;
+canonical, disjoint unavailable manifests; synthetic-provider executable discovery
+and invocation; and Windows-invalid filenames through direct input.
+The synthetic `gh` fixture uses a Windows `.exe` launcher generated with
+`pip._vendor.distlib.scripts.ScriptMaker` and verifies both API calls with a
+fake-only `PATH` and an explicit mock-specific `PYTHONPATH`.
+Only the ten-discussion parameter that creates Windows-invalid filesystem names
+is POSIX-only; equivalent adversarial names remain covered by direct-input tests
+on all platforms. A Linux run does not validate Windows launcher execution or
+native Windows behavior.

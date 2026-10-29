@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import zipfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -14,10 +16,174 @@ from devops_toolkit.commands.ci_evidence import (
     write_bundle,
 )
 from devops_toolkit.core.exceptions import CommandExecutionError, ConfigurationError
-from devops_toolkit.core.models import Severity
+from devops_toolkit.core.models import Finding, Severity
 from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive
 from devops_toolkit.core.subprocess import CommandResult
 from devops_toolkit.reporters.dispatcher import ReportFormat, render_report
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["", ".", "./", ".\\", "..", "nested/..", "nested/", "nested\\", "nested/.", "nested/./"],
+)
+@pytest.mark.parametrize("boundary", ["analyze", "bundle"])
+def test_directory_only_log_identities_terminate_safely(
+    tmp_path: Path, name: str, boundary: str
+) -> None:
+    script = """
+import sys
+from pathlib import Path
+from devops_toolkit.commands.ci_evidence import analyze_logs, build_report, write_bundle
+from devops_toolkit.core.exceptions import ConfigurationError
+root, name, boundary = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+source = root / 'source'
+source.mkdir()
+(source / 'job.log').write_text('exit code 137', encoding='utf-8')
+report, _, _ = build_report(logs_dir=source)
+destination = root / 'archive.zip'
+destination.write_bytes(b'existing archive')
+logs = {name: 'ordinary diagnostic', 'job.log': 'exit code 137'}
+try:
+    if boundary == 'analyze':
+        analyze_logs(logs)
+    else:
+        write_bundle(destination, report, logs, {})
+except ConfigurationError as exc:
+    assert 'log' in str(exc).lower()
+    assert destination.read_bytes() == b'existing archive'
+else:
+    raise AssertionError('Directory-only identity accepted')
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path), name, boundary],
+        capture_output=True,
+        text=True,
+        timeout=3,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "missing/token=CANARY_HEAD CANARY_TAIL.log",
+        "../token=CANARY_HEAD CANARY_TAIL.log",
+        "ordinary.log",
+    ],
+)
+def test_missing_log_fingerprint_tracks_sanitized_resource(tmp_path: Path, name: str) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "ordinary.log").write_text("exit code 137", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    finding = report.findings[0]
+    finding.resource.name = finding.resource.identifier = finding.evidence.location = name
+    finding.fingerprint = ""
+    report.findings = [Finding.model_validate(finding.model_dump())]
+    original = report.findings[0].fingerprint
+    for iteration in range(3):
+        bundle = tmp_path / f"fingerprint-{iteration}.zip"
+        write_bundle(bundle, report, {name: "exit code 137"} if name.startswith("..") else {}, {})
+        with zipfile.ZipFile(bundle) as archive:
+            payload = json.loads(archive.read("report.json"))
+        item = payload["findings"][0]
+        expected = Finding.model_validate({**item, "fingerprint": ""}).fingerprint
+        assert item["fingerprint"] == expected
+        assert (item["fingerprint"] == original) == (item["resource"]["name"] == name)
+        report = type(report).model_validate(payload)
+
+
+def test_rejected_log_and_previous_canonical_reference_stay_one_missing_identity(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "job.log").write_text("exit code 137", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    name = "../token=CANARY_HEAD CANARY_TAIL.log"
+    finding = report.findings[0]
+    finding.resource.name = finding.resource.identifier = finding.evidence.location = name
+    report.extensions = {"log_files": [name]}
+    previous = None
+    for iteration in range(3):
+        destination = tmp_path / f"rejected-{iteration}.zip"
+        write_bundle(destination, report, {name: "exit code 137"}, {})
+        with zipfile.ZipFile(destination) as archive:
+            payload = json.loads(archive.read("report.json"))
+            assert payload["extensions"]["unarchived_log_files"] == ["../[REDACTED].log"]
+            assert not any(member.startswith("logs/") for member in archive.namelist())
+        if previous is not None:
+            assert payload == previous
+        previous = payload
+        report = type(report).model_validate(payload)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_previous_unarchived_entries_are_canonical_disjoint_and_idempotent(
+    tmp_path: Path, reverse: bool
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "job.log").write_text("exit code 137", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    archived = "token=CANARY_ARCHIVED.log"
+    report.findings = []
+    missing = ["token=CANARY_MISSING_A.log", "token=CANARY_MISSING_B.log"]
+    previous = [*missing, missing[0], archived, "[REDACTED].log"]
+    if reverse:
+        previous.reverse()
+    report.extensions = {"log_files": [archived], "unarchived_log_files": previous}
+    canonical = None
+    for iteration in range(3):
+        bundle = tmp_path / f"manifest-{iteration}.zip"
+        write_bundle(bundle, report, {archived: "exit code 137"}, {})
+        with zipfile.ZipFile(bundle) as archive:
+            payload = json.loads(archive.read("report.json"))
+            names = payload["extensions"]["unarchived_log_files"]
+            members = {name[5:] for name in archive.namelist() if name.startswith("logs/")}
+            assert members == set(payload["extensions"]["log_files"]) == {"[REDACTED].log"}
+            assert len(names) == len(set(names)) == len(missing)
+            assert not members.intersection(names)
+            assert names == sorted(names)
+            assert "CANARY" not in archive.read("report.json").decode()
+        if canonical is not None:
+            assert payload == canonical
+        canonical = payload
+        report = type(report).model_validate(payload)
+
+
+@pytest.mark.parametrize("report_format", list(ReportFormat))
+def test_credential_urls_are_safe_on_all_direct_bundle_surfaces(
+    tmp_path: Path, report_format: ReportFormat
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "job.log").write_text("exit code 137", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    name = "ordinary/token=https://CANARY_USER:CANARY_PASS@example.invalid/logs/job.log"
+    report.metadata.target = name
+    finding = report.findings[0]
+    finding.resource.name = finding.resource.identifier = finding.evidence.location = name
+    report.extensions = {
+        "log_files": [name],
+        "timeline": [{"source": name}],
+        "run": {"logPath": name},
+    }
+    bundle = tmp_path / "url.zip"
+    write_bundle(bundle, report, {name: "exit code 137"}, {"nested": [{"artifact_paths": [name]}]})
+    with zipfile.ZipFile(bundle) as archive:
+        payload = json.loads(archive.read("report.json"))
+        names = payload["extensions"]["log_files"]
+        assert len(names) == 1
+        assert archive.namelist().count("logs/" + names[0]) == 1
+        surfaces = [
+            *archive.namelist(),
+            *(archive.read(member).decode() for member in archive.namelist()),
+        ]
+        safe_report = type(report).model_validate(payload)
+        surfaces.append(render_report(safe_report, report_format, color=False))
+    assert all("CANARY" not in surface for surface in surfaces)
 
 
 @pytest.mark.parametrize("reverse", [False, True])
