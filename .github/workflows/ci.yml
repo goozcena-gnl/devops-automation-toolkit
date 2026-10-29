@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -74,7 +74,7 @@ jobs:
       - name: actionlint
         # v1.7.12 release tag resolves to 914e7df21a07ef503a81201c76d2b11c789d3fca.
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
       - name: Install Plumber alignment checker dependency
@@ -94,7 +94,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.13'
           cache: pip
@@ -126,13 +126,40 @@ jobs:
       - name: Execute Workstation Doctor contract smoke test
         shell: pwsh
         run: |
+          function Assert-WorkstationDoctorExitCode {
+            param([int]$Code)
+            if ($Code -notin @(0, 5)) {
+              throw "Unexpected Workstation Doctor exit code: $Code"
+            }
+            # GitHub's pwsh wrapper also checks LASTEXITCODE after the step.
+            $global:LASTEXITCODE = 0
+          }
+
+          # Deterministically verify success (0), partial (5), and failure (1).
+          foreach ($case in @(
+            @{ Code = 0; Accepted = $true },
+            @{ Code = 5; Accepted = $true },
+            @{ Code = 1; Accepted = $false }
+          )) {
+            $global:LASTEXITCODE = $case.Code
+            $accepted = $true
+            try {
+              Assert-WorkstationDoctorExitCode -Code $LASTEXITCODE
+            } catch {
+              $accepted = $false
+            }
+            if ($accepted -ne $case.Accepted -or ($accepted -and $LASTEXITCODE -ne 0)) {
+              throw "Workstation Doctor exit-code contract failed: $($case.Code)"
+            }
+          }
+          $global:LASTEXITCODE = 0
+
           & ./scripts/workstation/devops-workstation-audit.ps1 `
             -RequiredTools git,ssh `
             -OutputPath workstation-report.json
           $collectorExit = $LASTEXITCODE
-          if ($collectorExit -notin @(0, 5)) {
-            throw "Unexpected Workstation Doctor exit code: $collectorExit"
-          }
+          Assert-WorkstationDoctorExitCode -Code $collectorExit
+          Write-Host "Accepted Workstation Doctor exit code: $collectorExit"
       - name: Validate Workstation Doctor report schema
         shell: pwsh
         run: |

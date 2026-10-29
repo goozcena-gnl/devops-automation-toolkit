@@ -120,7 +120,8 @@
     "run": {
       "id": 123,
       "name": "CI",
-      "conclusion": "failure"
+      "conclusion": "failure",
+      "token": "[REDACTED]"
     }
   }
 }
