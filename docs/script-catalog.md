@@ -19,7 +19,7 @@ This catalog remains the complete 20-tool inventory.
 | 9 | kubeconfig-hygiene | `devops-toolkit kubeconfig-hygiene` | Implemented | certificate parsing |
 | 10 | tls-audit | `devops-toolkit tls-audit` | Implemented | sockets and TLS APIs |
 | 11 | image-gate | `devops-toolkit image-gate` | Implemented | scanner normalization |
-| 12 | ci-evidence | `devops-toolkit ci-evidence` | Implemented | GitHub logs and redaction |
+| 12 | ci-evidence | `devops-toolkit ci-evidence` | Implemented | GitHub logs, structured redaction, sanitized bundles |
 | 13 | prom-audit | `devops-toolkit prom-audit` | Implemented | Prometheus API |
 | 14 | slo-budget | `devops-toolkit slo-budget` | Implemented | time-series calculations |
 | 15 | kube-rightsize | `devops-toolkit kube-rightsize` | Implemented | Metrics API and Prometheus |

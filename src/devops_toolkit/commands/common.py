@@ -11,6 +11,7 @@ from devops_toolkit.core.config import load_config
 from devops_toolkit.core.exit_codes import ExitCode
 from devops_toolkit.core.filesystem import atomic_write_text
 from devops_toolkit.core.models import Report, ReportStatus, Severity
+from devops_toolkit.core.redaction import Redactor
 from devops_toolkit.reporters.dispatcher import ReportFormat, render_report
 
 
@@ -57,7 +58,7 @@ def emit_report(
     rendered = render_report(report, report_format, color=not no_color)
     if output is not None:
         atomic_write_text(output, rendered)
-        typer.echo(str(output))
+        typer.echo(Redactor().redact_path(str(output)))
     else:
         typer.echo(rendered, nl=False)
 
