@@ -33,7 +33,7 @@ jobs:
       - name: Analyze GitHub Actions security
         uses: getplumber/plumber@7e581015a1295a49a7af14b346231d2fd8dff695 # v0.7.12
         with:
-          version: v0.6.3
+          version: v0.7.12
           verify-attestation: true
           config-file: .plumber.yaml
           soft-fail: false
