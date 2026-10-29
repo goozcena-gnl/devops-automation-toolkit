@@ -47,6 +47,26 @@ would occupy another log's ancestor directory, preventing overwrites or failed
 bundle writes on Windows as well as POSIX hosts. Ordinary non-colliding names
 are unchanged.
 
+Direct `write_bundle()` calls use one original-to-sanitized filename mapping for
+ZIP members and the report's `CILog` resource names/identifiers, evidence locations,
+exact log entries in finding `references`, timeline sources, and
+`extensions.log_files`. Both raw and already-sanitized
+references are supported without modifying the caller's report. Ordinary diagnostic
+text and non-log resource identities are not interpreted as filenames or rewritten
+using generic substitutions. Evidence locations can reference a log even when
+the finding describes a job rather than a log resource.
+Unarchived paths are recognized only from supplied log filenames, `CILog` findings,
+or the explicit `log_files` manifest. Their references receive component-aware
+masking, are recorded in `extensions.unarchived_log_files`, and mark the bundled
+report as partial. `extensions.log_files` lists only actual archived logs.
+Unmapped job identities, diagnostic text, and unrelated references are not treated
+as file paths. Traversal-rejected sources remain excluded from the archive.
+Unavailable log identities use the same collision allocator with actual ZIP names
+reserved, preventing missing evidence from aliasing an archived log. Existing
+unarchived identities remain stable when the bundled report is sanitized again.
+Fingerprints are recomputed only when the resource identity changes; benign
+identities and fingerprints remain unchanged.
+
 Direct Python metadata inputs are normalized before recursive redaction: tuples
 become JSON arrays, `pathlib` paths become component-redacted strings, and dates
 and timestamps use ISO 8601 strings. JSON scalars, arrays and objects retain
@@ -54,6 +74,15 @@ their types. Unknown objects become the replacement marker without invoking
 `str()`; archive serialization has no later string-conversion fallback.
 Non-string dictionary keys, non-finite numbers, cycles and nesting beyond 64
 levels fail explicitly rather than emitting ambiguous or unsafe metadata.
+Invalid local or provider metadata raises `ConfigurationError` and the CLI returns
+invalid-input exit code **2** with a bounded, value-free explanation, not a traceback.
+Malformed provider JSON retains the controlled command-error boundary (also exit
+code **2**). The direct `write_bundle()` API also raises `ConfigurationError` for
+invalid metadata or report data. Input validation completes before opening the
+destination: rejected input creates no partial archive and preserves any existing
+archive. Filesystem/ZIP I/O errors retain their native Python exception behavior.
+Depth is measured from the metadata or report-extension root at zero, with values
+at depth 64 supported; the report's structural envelope does not reduce this limit.
 JSON object keys remain case-sensitive and Unicode-distinct. Colliding sanitized
 keys retain all values using a non-reversible digest prefix with a numeric
 fallback; existing safe keys are reserved first. Repeated sanitization preserves
@@ -88,3 +117,11 @@ An unterminated sensitive value is redacted through the remaining text rather
 than retaining a possible credential suffix. Keep a separate protected source
 copy if the original evidence is required. Unlabelled secrets or arbitrary
 encodings without a recognized credential key are not guaranteed to be detected.
+Every boundary recognized by Python's `splitlines()` is counted when masking
+multiline values, malformed JSON, or private-key blocks, including CRLF as a single
+boundary, standalone CR, and Unicode line separators. Removed boundaries are
+represented by LF placeholders, retaining original finding/timeline line numbers
+without inserting invalid control characters inside JSON strings.
+Private-key blocks inside bare assignments are consumed together with adjacent
+credential segments before placeholders are inserted, so retained line counts
+cannot separate a credential suffix from its assignment.

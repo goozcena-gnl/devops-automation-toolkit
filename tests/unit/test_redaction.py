@@ -9,6 +9,56 @@ from devops_toolkit.core.logging import RedactingFilter
 from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive
 
 
+@pytest.mark.parametrize("prefix", ["", "CANARY_PREFIX"])
+@pytest.mark.parametrize("quote", ["", "'", '"'])
+@pytest.mark.parametrize("encoded", [False, True])
+def test_private_key_line_placeholders_do_not_expose_adjacent_credential_segments(
+    prefix: str, quote: str, encoded: bool
+) -> None:
+    value = prefix + "-----BEGIN PRIVATE KEY-----\nCANARY_KEY\n-----END PRIVATE KEY-----CANARY_TAIL"
+    text = "password=" + quote + value + quote + "\nexit code 137"
+    if encoded:
+        text = json.dumps({"message": text, "ordinary": 7})
+    safe = Redactor().redact(text)
+    assert "CANARY" not in safe
+    assert Redactor().redact(safe) == safe
+    if encoded:
+        payload = json.loads(safe)
+        assert payload["ordinary"] == 7
+        assert payload["message"].splitlines()[-1] == "exit code 137"
+    else:
+        assert len(text.splitlines()) == len(safe.splitlines())
+        assert safe.splitlines()[-1] == "exit code 137"
+
+
+@pytest.mark.parametrize(
+    "boundary", ["\n", "\r", "\r\n", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]
+)
+@pytest.mark.parametrize(
+    "template",
+    [
+        'password="CANARY_HEAD{boundary}CANARY_TAIL"{boundary}exit code 137',
+        '{{"password": [{boundary}"CANARY_HEAD"{boundary}]}}{boundary}exit code 137',
+        '"password":"CANARY_HEAD{boundary}CANARY_TAIL"{boundary}exit code 137',
+        "-----BEGIN PRIVATE KEY-----{boundary}CANARY_HEAD{boundary}-----END PRIVATE KEY-----{boundary}exit code 137",
+    ],
+)
+def test_every_splitlines_boundary_survives_credential_masking(
+    boundary: str, template: str
+) -> None:
+    from devops_toolkit.commands.ci_evidence import analyze_logs
+
+    text = template.format(boundary=boundary)
+    redactor = Redactor()
+    safe = redactor.redact(text)
+    assert "CANARY" not in safe
+    assert len(safe.splitlines()) == len(text.splitlines())
+    assert redactor.redact(safe) == safe
+    findings, _, timeline = analyze_logs({"job.log": text})
+    assert findings[0].evidence.line == len(text.splitlines())
+    assert timeline[0]["line"] == len(text.splitlines())
+
+
 @pytest.mark.parametrize(
     "field",
     [
@@ -32,6 +82,9 @@ from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive
     [
         "ordinary/token=CANARY_HEAD CANARY_TAIL/job.log",
         r"C:\ordinary directory\token=CANARY_HEAD CANARY_TAIL\job.log",
+        "ordinary/token=CANARY_HEAD\tCANARY_TAIL/job.log",
+        "ordinary/token='CANARY_HEAD CANARY_TAIL'/job.log",
+        'ordinary/"password":"CANARY_HEAD CANARY_TAIL".log',
     ],
 )
 def test_json_metadata_path_fields_mask_complete_components(field: str, path: str) -> None:
@@ -303,7 +356,7 @@ def test_redacts_private_key_block() -> None:
     value = "-----BEGIN PRIVATE KEY-----\nabc123\n-----END PRIVATE KEY-----"
     result = Redactor().redact(value)
     assert "abc123" not in result
-    assert result == "[REDACTED]"
+    assert result == "[REDACTED]\n\n"
 
 
 def test_custom_redaction_pattern() -> None:
@@ -468,7 +521,7 @@ def test_private_key_detection_precedes_assignment_redaction() -> None:
         "password=-----BEGIN PRIVATE KEY-----\n"
         "SYNTHETIC_PRIVATE_MATERIAL\n-----END PRIVATE KEY-----"
     )
-    assert Redactor().redact(text) == "password=[REDACTED]"
+    assert Redactor().redact(text) == "password=[REDACTED]\n\n"
 
 
 def test_encoded_unquoted_password_with_a_quote_has_no_remaining_suffix() -> None:

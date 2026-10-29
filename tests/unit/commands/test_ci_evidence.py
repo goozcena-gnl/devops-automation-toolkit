@@ -13,11 +13,292 @@ from devops_toolkit.commands.ci_evidence import (
     build_report,
     write_bundle,
 )
-from devops_toolkit.core.exceptions import CommandExecutionError
+from devops_toolkit.core.exceptions import CommandExecutionError, ConfigurationError
 from devops_toolkit.core.models import Severity
 from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive
 from devops_toolkit.core.subprocess import CommandResult
 from devops_toolkit.reporters.dispatcher import ReportFormat, render_report
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_missing_log_collisions_cannot_alias_archived_evidence(
+    tmp_path: Path, reverse: bool
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "ordinary.log").write_text("exit code 137", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    raw = {"password=CANARY_ARCHIVED.log": "exit code 137"}
+    findings, _, timeline = analyze_logs(raw)
+    report.findings = findings
+    missing = ["token=CANARY_MISSING_A.log", "token=CANARY_MISSING_B.log"]
+    if reverse:
+        missing.reverse()
+    for name in missing:
+        finding = findings[0].model_copy(deep=True)
+        finding.resource.name = finding.resource.identifier = finding.evidence.location = name
+        finding.references = [name]
+        finding.fingerprint = ""
+        report.findings.append(type(finding).model_validate(finding.model_dump()))
+        timeline.append({"source": name, "line": 1})
+    report.extensions = {"log_files": ["[REDACTED].log", *missing], "timeline": timeline}
+    previous = report.as_dict()
+    for iteration in range(3):
+        bundle = tmp_path / f"missing-collisions-{iteration}.zip"
+        write_bundle(bundle, report, raw, {})
+        with zipfile.ZipFile(bundle) as archive:
+            payload = json.loads(archive.read("report.json"))
+            archived = set(payload["extensions"]["log_files"])
+            unavailable = payload["extensions"]["unarchived_log_files"]
+            assert archived == {"[REDACTED].log"}
+            assert len(set(unavailable)) == len(unavailable) == 2
+            assert archived.isdisjoint(unavailable)
+            assert {name[5:] for name in archive.namelist() if name.startswith("logs/")} == archived
+            for finding in payload["findings"]:
+                name = finding["resource"]["name"]
+                assert name == finding["resource"]["identifier"] == finding["evidence"]["location"]
+                assert name in archived or name in unavailable
+                assert archive.namelist().count("logs/" + name) == (1 if name in archived else 0)
+            assert "CANARY" not in archive.read("report.json").decode()
+        if iteration:
+            assert payload == previous
+        previous = payload
+        report = type(report).model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["missing/token=CANARY_HEAD CANARY_TAIL.log", "../token=CANARY_HEAD CANARY_TAIL.log"],
+)
+def test_unarchived_log_references_still_mask_complete_path_components(
+    tmp_path: Path, name: str
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "ordinary.log").write_text("exit code 137", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    finding = report.findings[0]
+    finding.resource.name = finding.resource.identifier = finding.evidence.location = name
+    finding.references = [name]
+    report.extensions = {"log_files": [name], "timeline": [{"source": name}]}
+    bundle = tmp_path / "missing.zip"
+    write_bundle(bundle, report, {name: "exit code 137"} if name.startswith("..") else {}, {})
+    with zipfile.ZipFile(bundle) as archive:
+        assert not any(member.startswith("logs/") for member in archive.namelist())
+        payload = archive.read("report.json").decode()
+        assert "CANARY" not in payload
+        decoded = json.loads(payload)
+        assert decoded["metadata"]["partial"] is True
+        assert decoded["extensions"]["log_files"] == []
+        assert decoded["extensions"]["unarchived_log_files"] == [Redactor().redact_path(name)]
+    repeated = tmp_path / "repeated-missing.zip"
+    write_bundle(repeated, type(report).model_validate(decoded), {}, {})
+    with zipfile.ZipFile(repeated) as archive:
+        assert json.loads(archive.read("report.json")) == decoded
+
+
+def test_unmapped_job_and_diagnostic_fields_keep_text_semantics(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "ordinary.log").write_text("exit code 137", encoding="utf-8")
+    report, logs, _ = build_report(logs_dir=source)
+    diagnostic = "token=CANARY_HEAD count=7"
+    finding = report.findings[0]
+    finding.resource.type = "CIJob"
+    finding.resource.name = finding.resource.identifier = finding.evidence.location = diagnostic
+    finding.references = [diagnostic, "https://docs.example.invalid/reference"]
+    finding.title = diagnostic
+    report.extensions["diagnostic"] = diagnostic
+    report.extensions["timeline"] = [{"source": diagnostic, "excerpt": diagnostic}]
+    bundle = tmp_path / "job-diagnostics.zip"
+    write_bundle(bundle, report, logs, {})
+    with zipfile.ZipFile(bundle) as archive:
+        payload = json.loads(archive.read("report.json"))
+    expected = Redactor().redact(diagnostic)
+    finding = payload["findings"][0]
+    assert expected.endswith("count=7")
+    assert finding["resource"]["name"] == finding["resource"]["identifier"] == expected
+    assert finding["evidence"]["location"] == finding["references"][0] == expected
+    assert finding["references"][1] == "https://docs.example.invalid/reference"
+    assert finding["title"] == payload["extensions"]["diagnostic"] == expected
+    assert payload["extensions"]["timeline"] == [{"source": expected, "excerpt": expected}]
+    assert "unarchived_log_files" not in payload["extensions"]
+    assert payload["metadata"]["partial"] is False
+
+
+def test_log_references_do_not_rewrite_job_names_or_diagnostic_text(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "ordinary.log").write_text("exit code 137", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    name = "password=CANARY_DIRECT.log"
+    finding = report.findings[0]
+    finding.resource.type = "CIJob"
+    finding.resource.name = finding.resource.identifier = name
+    finding.evidence.location = name
+    finding.references = [name, "https://docs.example.invalid/ci"]
+    finding.title = name
+    report.extensions = {"log_files": (name,), "timeline": ({"source": name},), "diagnostic": name}
+    bundle = tmp_path / "references.zip"
+    write_bundle(bundle, report, {name: "exit code 137"}, {})
+    with zipfile.ZipFile(bundle) as archive:
+        payload = json.loads(archive.read("report.json"))
+        finding = payload["findings"][0]
+        safe_name = "[REDACTED].log"
+        assert finding["evidence"]["location"] == safe_name
+        assert finding["references"] == [safe_name, "https://docs.example.invalid/ci"]
+        assert payload["extensions"]["log_files"] == [safe_name]
+        assert payload["extensions"]["timeline"] == [{"source": safe_name}]
+        for value in [
+            finding["resource"]["name"],
+            finding["resource"]["identifier"],
+            finding["title"],
+            payload["extensions"]["diagnostic"],
+        ]:
+            assert value == Redactor().redact(name)
+            assert value != safe_name
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize(
+    "names",
+    [
+        ["password=CANARY_DIRECT.log"],
+        [
+            "token=CANARY_HEAD CANARY_TAIL.log",
+            "token=CANARY_OTHER\tCANARY_SUFFIX.log",
+            "[REDACTED].log",
+            "[redacted].LOG",
+            "ordinary/job.log",
+        ],
+        ["token=CANARY0 data/child.log", "token=CANARY1 data", "ordinary/job.log"],
+    ],
+)
+def test_raw_bundle_references_share_archive_filename_mapping(
+    tmp_path: Path, names: list[str], reverse: bool
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "ordinary.log").write_text("exit code 137", encoding="utf-8")
+    report, _, _ = build_report(logs_dir=source)
+    raw = {name: f"exit code 137 diagnostic {index}" for index, name in enumerate(names)}
+    if reverse:
+        raw = dict(reversed(list(raw.items())))
+    template = report.findings[0]
+    report.findings = []
+    timeline = []
+    for name in raw:
+        finding = template.model_copy(deep=True)
+        finding.resource.name = finding.resource.identifier = finding.evidence.location = name
+        finding.references = [name, "https://docs.example.invalid/ci"]
+        finding.fingerprint = ""
+        report.findings.append(type(finding).model_validate(finding.model_dump()))
+        timeline.append({"source": name, "line": 1, "excerpt": "ordinary diagnostic"})
+    report.extensions.update(log_files=list(raw), timeline=timeline, diagnostic="ordinary/job.log")
+    before = report.model_dump_json()
+    safe = _sanitize_logs(raw)
+    expected_findings, _, _ = analyze_logs(raw)
+    for iteration in range(3):
+        bundle = tmp_path / f"raw-{iteration}.zip"
+        write_bundle(bundle, report, raw, {})
+        assert report.model_dump_json() == before
+        with zipfile.ZipFile(bundle) as archive:
+            members = archive.namelist()
+            payload = json.loads(archive.read("report.json"))
+            assert {name[5:] for name in members if name.startswith("logs/")} == set(safe)
+            assert set(payload["extensions"]["log_files"]) == set(safe)
+            assert {item["source"] for item in payload["extensions"]["timeline"]} == set(safe)
+            assert payload["extensions"]["diagnostic"] == "ordinary/job.log"
+            for finding in payload["findings"]:
+                name = finding["resource"]["name"]
+                assert name == finding["resource"]["identifier"] == finding["evidence"]["location"]
+                assert members.count("logs/" + name) == 1
+                assert finding["references"] == [name, "https://docs.example.invalid/ci"]
+                assert archive.read("logs/" + name).decode() == safe[name]
+            assert {item["fingerprint"] for item in payload["findings"]} == {
+                item.fingerprint for item in expected_findings
+            }
+            surfaces = [*members, *(archive.read(name).decode() for name in members)]
+            assert all("CANARY" not in surface for surface in surfaces)
+        report = type(report).model_validate(payload)
+        raw = safe
+        before = report.model_dump_json()
+
+
+@pytest.mark.parametrize("kind", ["nan", "inf", "-inf", "depth", "cycle", "key"])
+@pytest.mark.parametrize("boundary", ["build", "bundle", "report"])
+def test_invalid_metadata_uses_controlled_input_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str, boundary: str
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "job.log").write_text("exit code 137", encoding="utf-8")
+    report, logs, _ = build_report(logs_dir=source)
+    value: object = float(kind) if kind in {"nan", "inf", "-inf"} else "token=CANARY_INVALID"
+    if kind == "depth":
+        for _ in range(66):
+            value = [value]
+    elif kind == "cycle":
+        value = []
+        value.append(value)
+    elif kind == "key":
+        value = {1: "token=CANARY_INVALID"}
+    metadata = {"run": {"diagnostic": value}}
+    bundle = tmp_path / "bundle.zip"
+    bundle.write_bytes(b"existing destination")
+    with pytest.raises(ConfigurationError, match="Invalid CI") as error:
+        if boundary == "build":
+            monkeypatch.setattr(
+                "devops_toolkit.commands.ci_evidence._read_json", lambda path: metadata
+            )
+            build_report(logs_dir=source, metadata_path=tmp_path / "metadata.json")
+        else:
+            if boundary == "report":
+                report.extensions["run"] = metadata
+                metadata = {}
+            write_bundle(bundle, report, logs, metadata)
+    assert "CANARY" not in str(error.value)
+    assert bundle.read_bytes() == b"existing destination"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["bundle.zip", "source"]
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf"), "depth"])
+def test_provider_invalid_metadata_is_configuration_error(
+    monkeypatch: pytest.MonkeyPatch, value: object
+) -> None:
+    if value == "depth":
+        value = "token=CANARY_PROVIDER"
+        for _ in range(66):
+            value = [value]
+    monkeypatch.setattr("devops_toolkit.commands.ci_evidence.executable_path", lambda name: name)
+    monkeypatch.setattr(
+        "devops_toolkit.commands.ci_evidence.run_command",
+        lambda args, **kwargs: CommandResult(
+            tuple(args), 0, json.dumps({"jobs": []} if "/jobs?" in args[-1] else {"x": value}), ""
+        ),
+    )
+    with pytest.raises(ConfigurationError, match="Invalid CI") as error:
+        _collect_github_metadata("synthetic/repository", 7, 1)
+    assert "CANARY" not in str(error.value)
+
+
+def test_supported_depth_metadata_survives_report_and_bundle(tmp_path: Path) -> None:
+    value: object = "token=CANARY_DEEP"
+    for _ in range(63):
+        value = {"nested": value}
+    metadata = {"run": value}
+    metadata_path = tmp_path / "metadata.json"
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "job.log").write_text("exit code 137", encoding="utf-8")
+    report, logs, safe = build_report(logs_dir=source, metadata_path=metadata_path)
+    bundle = tmp_path / "deep.zip"
+    write_bundle(bundle, report, logs, metadata)
+    with zipfile.ZipFile(bundle) as archive:
+        assert json.loads(archive.read("metadata.json")) == safe
+        assert json.loads(archive.read("report.json")) == report.as_dict()
+        assert "CANARY" not in archive.read("report.json").decode()
 
 
 def test_provider_metadata_is_parsed_before_sanitizing_colliding_keys(
@@ -60,6 +341,9 @@ def test_provider_metadata_errors_do_not_expose_raw_output(
         "token=CANARY_HEAD CANARY_TAIL",
         "password=CANARY_HEAD CANARY_TAIL/child.log",
         "ordinary/token=CANARY_HEAD CANARY_TAIL/job.log",
+        "ordinary/token=CANARY_HEAD\tCANARY_TAIL/job.log",
+        "ordinary/token='CANARY_HEAD CANARY_TAIL'/job.log",
+        'ordinary/"password":"CANARY_HEAD CANARY_TAIL".log',
         r"ordinary\token=CANARY_HEAD CANARY_TAIL\job.log",
         "ordinary//token=CANARY_HEAD CANARY_TAIL/./job.log",
     ],

@@ -48,7 +48,26 @@ _QUOTE = re.compile(r"""\\*["']""")
 # mistaken for the opening quote of the next string. Validate before trusting it.
 _JSON_STRING = re.compile(r'(?<!\\)"(?:[^"\\\x00-\x1f]|\\[^\x00-\x1f])*"')
 _JSON_TOKEN = re.compile(_JSON_STRING.pattern + r"|[{}\[\]]")
-_SEPARATED_OPERATOR = re.compile(r"[;|&<>()]+(?=[ \t\r\n])")
+_VALUE_WHITESPACE = " \t\r\n\v\f\x1c\x1d\x1e\x85\u2028\u2029"
+_SEPARATED_OPERATOR = re.compile(r"[;|&<>()]+(?=[" + _VALUE_WHITESPACE + "])")
+_LINE_BREAK = re.compile(r"\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]")
+_PRIVATE_KEY = re.compile(
+    r"-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----.*?"
+    r"-----END(?: [A-Z0-9]+)? PRIVATE KEY-----",
+    re.DOTALL,
+)
+
+
+def _preserve_line_breaks(original: str, replacement: str) -> str:
+    missing = len(_LINE_BREAK.findall(original)) - len(_LINE_BREAK.findall(replacement))
+    return replacement + "\n" * max(0, missing)
+
+
+def _sub_preserving_line_breaks(pattern: Pattern[str], replacement: str, text: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        return _preserve_line_breaks(match[0], match.expand(replacement))
+
+    return pattern.sub(replace, text)
 
 
 def _verified_json_spans(text: str) -> list[tuple[int, int]]:
@@ -111,17 +130,17 @@ def _redact_json_strings(text: str, sanitize: Callable[[str], str]) -> str:
             )
             and not verified
             and end < len(text)
-            and text[end] not in " \t\r\n"
+            and text[end] not in _VALUE_WHITESPACE
         ):
             # A sensitive JSON-looking token does not establish a separate tail.
             end, _, _ = _shell_value_end(text, match.start())
+        replacement = match[0] if safe == decoded else json.dumps(safe)
         parts.extend(
             (
                 text[previous : match.start()],
-                match[0] if safe == decoded else json.dumps(safe),
+                _preserve_line_breaks(text[match.start() : end], replacement),
             )
         )
-        parts.append("\n" * text.count("\n", match.end(), end))
         previous = end
     parts.append(text[previous:])
     return "".join(parts)
@@ -169,6 +188,9 @@ def _shell_value_end(text: str, start: int) -> tuple[int, str, bool]:
     position = start
     operator_end = start
     while position < len(text):
+        if text.startswith("-----BEGIN", position) and (key := _PRIVATE_KEY.match(text, position)):
+            position = key.end()
+            continue
         char = text[position]
         frame = stack[-1] if stack else ""
         if char == "\\" and frame != "'":
@@ -199,14 +221,14 @@ def _shell_value_end(text: str, start: int) -> tuple[int, str, bool]:
             stack.append(")")
         elif frame == "}" and char == "{":
             stack.append("}")
-        elif not stack and char in " \t\r\n":
+        elif not stack and char in _VALUE_WHITESPACE:
             break
         elif not stack and char in ";|&<>()":
             if position >= operator_end:
                 operator_end = position + 1
                 while operator_end < len(text) and text[operator_end] in ";|&<>()":
                     operator_end += 1
-            if operator_end < len(text) and text[operator_end] in " \t\r\n":
+            if operator_end < len(text) and text[operator_end] in _VALUE_WHITESPACE:
                 break
         position += 1
     return min(position, len(text)), delimiter, not stack
@@ -219,7 +241,7 @@ def _value_end(
         return _shell_value_end(text, start)
     if quote := _QUOTE.match(text, start):
         end, closed = _quoted_end(text, start, quote[0])
-        if closed and not verified and end < len(text) and text[end] not in " \t\r\n":
+        if closed and not verified and end < len(text) and text[end] not in _VALUE_WHITESPACE:
             end, _, closed = _shell_value_end(text, end)
         return end, quote[0], closed
     if structured and start < len(text) and text[start] in "[{":
@@ -244,7 +266,7 @@ def _value_end(
                     break
                 if not stack:
                     end = position + 1
-                    if not verified and end < len(text) and text[end] not in " \t\r\n":
+                    if not verified and end < len(text) and text[end] not in _VALUE_WHITESPACE:
                         end, _, closed = _shell_value_end(text, end)
                         return end, "", closed
                     return end, "", True
@@ -254,7 +276,7 @@ def _value_end(
         _, end = json.JSONDecoder().raw_decode(text, start)
     except (ValueError, RecursionError):
         return _shell_value_end(text, start)
-    if verified or end == len(text) or text[end] in " \t\r\n":
+    if verified or end == len(text) or text[end] in _VALUE_WHITESPACE:
         return end, "", True
     # A quoted key alone does not make its unquoted value valid JSON.
     return _shell_value_end(text, start)
@@ -303,7 +325,9 @@ def _redact_assignments(text: str, replacement: str) -> str:
         )
         if end == start:
             continue
-        if not delimiter and any(char in replacement for char in " \t\r\n\"'\\$`;|&<>()"):
+        if not delimiter and any(
+            char in replacement for char in _VALUE_WHITESPACE + "\"'\\$`;|&<>()"
+        ):
             # Emit a single stable shell word even for a custom marker with quotes.
             safe = shlex.quote(replacement)
         elif value_quote:
@@ -312,7 +336,7 @@ def _redact_assignments(text: str, replacement: str) -> str:
             safe = _replacement_token(replacement, delimiter)
         else:
             safe = replacement
-        safe += "\n" * text.count("\n", start, end)
+        safe = _preserve_line_breaks(text[start:end], safe)
         parts.extend((text[previous:start], safe))
         previous = end
     parts.append(text[previous:])
@@ -327,14 +351,7 @@ class RedactionRule:
 
 
 DEFAULT_RULES: tuple[RedactionRule, ...] = (
-    RedactionRule(
-        "private-key",
-        re.compile(
-            r"-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----.*?"
-            r"-----END(?: [A-Z0-9]+)? PRIVATE KEY-----",
-            re.DOTALL,
-        ),
-    ),
+    RedactionRule("private-key", _PRIVATE_KEY),
     RedactionRule("github-token", re.compile(r"\bgh(?:p|o|u|s|r)_[A-Za-z0-9_]{20,}\b")),
     RedactionRule("aws-access-key", re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")),
     RedactionRule(
@@ -365,11 +382,14 @@ class Redactor:
 
     def redact(self, value: str) -> str:
         redacted = value
+        if _PRIVATE_KEY.search(redacted):
+            # Mask the whole assignment before block placeholders can split its tail.
+            redacted = _redact_assignments(redacted, self._replacement)
         for rule in self._rules:
             replacement = rule.replacement
             if replacement == DEFAULT_REPLACEMENT:
                 replacement = self._replacement
-            redacted = rule.pattern.sub(replacement, redacted)
+            redacted = _sub_preserving_line_breaks(rule.pattern, replacement, redacted)
             if rule is DEFAULT_RULES[-1]:
                 # Finish the default boundary before the existing custom rules.
                 redacted = _redact_json_strings(redacted, self._redact_default_literal)
@@ -379,11 +399,13 @@ class Redactor:
     def _redact_default_literal(self, value: str) -> str:
         """Inspect a decoded JSON string using only built-in credential rules."""
         redacted = value
+        if _PRIVATE_KEY.search(redacted):
+            redacted = _redact_assignments(redacted, self._replacement)
         for rule in DEFAULT_RULES:
             replacement = rule.replacement
             if replacement == DEFAULT_REPLACEMENT:
                 replacement = self._replacement
-            redacted = rule.pattern.sub(replacement, redacted)
+            redacted = _sub_preserving_line_breaks(rule.pattern, replacement, redacted)
         redacted = _redact_json_strings(redacted, self._redact_default_literal)
         return _redact_assignments(redacted, self._replacement)
 

@@ -101,11 +101,24 @@ SIGNATURES: tuple[tuple[str, Severity, re.Pattern[str], str], ...] = (
 def _read_json(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ConfigurationError(f"Unable to read CI metadata JSON: {exc}") from exc
+    except (OSError, UnicodeError) as exc:
+        raise ConfigurationError("Unable to read CI metadata JSON as UTF-8") from exc
+    except (ValueError, RecursionError) as exc:
+        raise ConfigurationError("Invalid CI metadata JSON or excessive nesting") from exc
     if not isinstance(payload, dict):
         raise ConfigurationError("CI metadata root must be an object")
     return payload
+
+
+def _sanitize_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    try:
+        safe: dict[str, Any] = Redactor().redact_data(metadata)
+    except (ValueError, RecursionError) as exc:
+        raise ConfigurationError(
+            "Invalid CI metadata: require finite JSON values, string keys, "
+            "and nesting no deeper than 64 levels (no cycles)"
+        ) from exc
+    return safe
 
 
 def _safe_environment() -> dict[str, str]:
@@ -173,11 +186,14 @@ def _collect_github_metadata(repository: str, run_id: int, timeout: int) -> dict
         run_payload = json.loads(run_result.stdout)
         jobs_payload = json.loads(jobs_result.stdout)
     except json.JSONDecodeError as exc:
-        raise CommandExecutionError(f"GitHub API returned invalid JSON: {exc}") from exc
-    safe_metadata: dict[str, Any] = Redactor().redact_data(
-        {"run": run_payload, "jobs": jobs_payload.get("jobs", [])}
-    )
-    return safe_metadata
+        raise CommandExecutionError("GitHub API returned invalid JSON") from exc
+    except RecursionError as exc:
+        raise ConfigurationError("Invalid CI metadata JSON returned by GitHub API") from exc
+    if not isinstance(run_payload, dict) or not isinstance(jobs_payload, dict):
+        raise ConfigurationError("Invalid CI metadata: GitHub API roots must be objects")
+    if not isinstance(jobs_payload.get("jobs", []), list):
+        raise ConfigurationError("Invalid CI metadata: GitHub jobs must be an array")
+    return _sanitize_metadata({"run": run_payload, "jobs": jobs_payload.get("jobs", [])})
 
 
 def _extract_zip(source: Path, destination: Path, *, max_total_bytes: int) -> None:
@@ -223,16 +239,19 @@ def _collect_log_files(root: Path, *, max_file_bytes: int, max_total_bytes: int)
     return _sanitize_logs(collected)
 
 
-def _sanitize_logs(logs: dict[str, str]) -> dict[str, str]:
+def _log_filename_mapping(
+    logs: dict[str, str], *, reserved_names: set[str] | None = None
+) -> dict[str, str]:
     redactor = Redactor()
     sanitized: dict[str, str] = {}
     names = {
         filename: PureWindowsPath(redactor.redact_path(filename)).as_posix() for filename in logs
     }
-    reserved = {PureWindowsPath(name.casefold()) for name in names.values()}
+    occupied = {PureWindowsPath(name.casefold()) for name in reserved_names or ()}
+    reserved = {PureWindowsPath(name.casefold()) for name in names.values()} | occupied
     reserved_dirs = {parent for path in reserved for parent in path.parents}
-    used: set[PureWindowsPath] = set()
-    used_dirs: set[PureWindowsPath] = set()
+    used = occupied.copy()
+    used_dirs = {parent for path in occupied for parent in path.parents}
 
     def conflicts(
         name: str, files: set[PureWindowsPath], directories: set[PureWindowsPath]
@@ -261,8 +280,85 @@ def _sanitize_logs(logs: dict[str, str]) -> dict[str, str]:
         path = PureWindowsPath(name.casefold())
         used.add(path)
         used_dirs.update(path.parents)
-        sanitized[name] = redactor.redact(logs[filename])
+        sanitized[filename] = name
     return sanitized
+
+
+def _sanitize_logs(logs: dict[str, str]) -> dict[str, str]:
+    redactor = Redactor()
+    return {
+        name: redactor.redact(logs[filename])
+        for filename, name in _log_filename_mapping(logs).items()
+    }
+
+
+def _map_report_log_references(
+    report_data: dict[str, Any], names: dict[str, str], log_sources: dict[str, str]
+) -> None:
+    redactor = Redactor()
+    references = {name: name for name in names.values()}
+    references.update(names)
+    unarchived: dict[str, str] = {}
+    extensions = report_data["extensions"]
+    existing = extensions.get("unarchived_log_files", [])
+    if not isinstance(existing, (list, tuple)):
+        raise ConfigurationError("Invalid CI report: unarchived_log_files must be an array")
+    previous = list(existing)
+    previous_names = {item for item in previous if isinstance(item, str)}
+    for source in previous_names:
+        if redactor.redact_path(source) == source:
+            references.setdefault(source, source)
+
+    def declare_log(value: Any) -> None:
+        if isinstance(value, str) and value not in references:
+            unarchived[value] = ""
+
+    for source in log_sources:
+        declare_log(source)
+    for source in previous_names:
+        declare_log(source)
+    if isinstance(extensions.get("log_files"), (list, tuple)):
+        for source in extensions["log_files"]:
+            declare_log(source)
+    for finding in report_data["findings"]:
+        resource = finding.get("resource")
+        if resource and resource["type"] == "CILog":
+            declare_log(resource["name"])
+            declare_log(resource.get("identifier"))
+            declare_log(finding["evidence"].get("location"))
+    unarchived = _log_filename_mapping(unarchived, reserved_names=set(names.values()))
+    references.update(unarchived)
+    for finding in report_data["findings"]:
+        resource = finding.get("resource")
+        if resource and resource["type"] == "CILog":
+            original = resource["name"]
+            for key in ("name", "identifier"):
+                if resource.get(key) in references:
+                    resource[key] = references[resource[key]]
+            if original in names and resource["name"] != original:
+                finding["fingerprint"] = ""
+        evidence = finding["evidence"]
+        if evidence.get("location") in references:
+            evidence["location"] = references[evidence["location"]]
+        finding["references"] = [
+            references.get(reference, reference) for reference in finding["references"]
+        ]
+    if isinstance(extensions.get("log_files"), (list, tuple)):
+        extensions["log_files"] = sorted(names.values())
+    if isinstance(extensions.get("timeline"), (list, tuple)):
+        for item in extensions["timeline"]:
+            if isinstance(item, dict) and isinstance(item.get("source"), str):
+                item["source"] = references.get(item["source"], item["source"])
+    if unarchived:
+        extensions["unarchived_log_files"] = [
+            *previous,
+            *(
+                unarchived[source]
+                for source in sorted(unarchived)
+                if unarchived[source] not in previous_names
+            ),
+        ]
+        report_data["metadata"]["partial"] = True
 
 
 def analyze_logs(
@@ -355,12 +451,36 @@ def _job_findings(metadata: dict[str, Any]) -> list[Finding]:
 def write_bundle(
     destination: Path, report: Report, logs: dict[str, str], metadata: dict[str, Any]
 ) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    """Write sanitized evidence; invalid metadata/report values raise ConfigurationError.
+
+    Validation finishes before opening the destination, preserving an existing
+    archive and leaving no partial archive when input is rejected.
+    """
     redactor = Redactor()
-    report_data = report.model_dump(mode="python", exclude_none=True)
+    safe_metadata = _sanitize_metadata(metadata)
+    relative_logs = {
+        filename: content
+        for filename, content in logs.items()
+        if not PureWindowsPath(filename).anchor and ".." not in PureWindowsPath(filename).parts
+    }
+    names = _log_filename_mapping(relative_logs)
+    try:
+        report_data = report.model_dump(mode="python", exclude_none=True)
+    except (ValueError, RecursionError) as exc:
+        raise ConfigurationError("Invalid CI report: cyclic or unsupported report data") from exc
+    _map_report_log_references(report_data, names, logs)
     report_data["metadata"]["target"] = redactor.redact_path(report.metadata.target)
-    safe_report = Report.model_validate(redactor.redact_data(report_data))
-    safe_metadata = redactor.redact_data(metadata)
+    # Validate extension depth independently of the report's structural envelope.
+    safe_extensions = _sanitize_metadata(report_data.pop("extensions"))
+    try:
+        safe_report_data = redactor.redact_data(report_data)
+        safe_report_data["extensions"] = safe_extensions
+        safe_report = Report.model_validate(safe_report_data)
+    except (ValueError, RecursionError) as exc:
+        raise ConfigurationError(
+            "Invalid CI report: unsupported or excessively nested data"
+        ) from exc
+    destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="devops-toolkit-ci-bundle-") as temp_dir:
         root = Path(temp_dir)
         atomic_write_text(root / "report.json", render_json(safe_report))
@@ -368,16 +488,11 @@ def write_bundle(
             root / "metadata.json", json.dumps(safe_metadata, indent=2, allow_nan=False) + "\n"
         )
         logs_root = root / "logs"
-        relative_logs = {
-            filename: content
-            for filename, content in logs.items()
-            if not PureWindowsPath(filename).anchor and ".." not in PureWindowsPath(filename).parts
-        }
-        for filename, content in _sanitize_logs(relative_logs).items():
+        for original, filename in names.items():
             safe_name = Path(filename)
             if safe_name.is_absolute() or ".." in safe_name.parts:
                 continue
-            atomic_write_text(logs_root / safe_name, content)
+            atomic_write_text(logs_root / safe_name, redactor.redact(relative_logs[original]))
         with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(root.rglob("*")):
                 if path.is_file():
@@ -417,12 +532,12 @@ def build_report(
         else:
             source = logs_dir
             target = str(logs_dir.resolve())
+        metadata = _sanitize_metadata(metadata)
         logs = _collect_log_files(
             source,
             max_file_bytes=max_file_bytes,
             max_total_bytes=max_total_bytes,
         )
-        metadata = Redactor().redact_data(metadata)
         findings, signatures, timeline = analyze_logs(logs)
         findings.extend(_job_findings(metadata))
         partial = not bool(logs)

@@ -689,14 +689,14 @@ def ci_evidence_command(
             max_file_bytes=max_file_value,
             max_total_bytes=max_total_value,
         )
+        if bundle is not None:
+            write_ci_evidence_bundle(bundle, report, logs, metadata_payload)
     except (ConfigurationError, CommandExecutionError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(ExitCode.INVALID_INPUT) from exc
     except DependencyUnavailableError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(ExitCode.DEPENDENCY_UNAVAILABLE) from exc
-    if bundle is not None:
-        write_ci_evidence_bundle(bundle, report, logs, metadata_payload)
     emit_report(
         report,
         format_from_config(merged, report_format),
