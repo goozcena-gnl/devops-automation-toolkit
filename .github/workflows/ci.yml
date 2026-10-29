@@ -126,13 +126,40 @@ jobs:
       - name: Execute Workstation Doctor contract smoke test
         shell: pwsh
         run: |
+          function Assert-WorkstationDoctorExitCode {
+            param([int]$Code)
+            if ($Code -notin @(0, 5)) {
+              throw "Unexpected Workstation Doctor exit code: $Code"
+            }
+            # GitHub's pwsh wrapper also checks LASTEXITCODE after the step.
+            $global:LASTEXITCODE = 0
+          }
+
+          # Deterministically verify success (0), partial (5), and failure (1).
+          foreach ($case in @(
+            @{ Code = 0; Accepted = $true },
+            @{ Code = 5; Accepted = $true },
+            @{ Code = 1; Accepted = $false }
+          )) {
+            $global:LASTEXITCODE = $case.Code
+            $accepted = $true
+            try {
+              Assert-WorkstationDoctorExitCode -Code $LASTEXITCODE
+            } catch {
+              $accepted = $false
+            }
+            if ($accepted -ne $case.Accepted -or ($accepted -and $LASTEXITCODE -ne 0)) {
+              throw "Workstation Doctor exit-code contract failed: $($case.Code)"
+            }
+          }
+          $global:LASTEXITCODE = 0
+
           & ./scripts/workstation/devops-workstation-audit.ps1 `
             -RequiredTools git,ssh `
             -OutputPath workstation-report.json
           $collectorExit = $LASTEXITCODE
-          if ($collectorExit -notin @(0, 5)) {
-            throw "Unexpected Workstation Doctor exit code: $collectorExit"
-          }
+          Assert-WorkstationDoctorExitCode -Code $collectorExit
+          Write-Host "Accepted Workstation Doctor exit code: $collectorExit"
       - name: Validate Workstation Doctor report schema
         shell: pwsh
         run: |
