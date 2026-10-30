@@ -20,7 +20,7 @@ filelock==4.2.1
 id==1.6.1
 idna==3.20
 importlib-metadata==9.0.1 ; python_full_version < '3.12' and platform_machine != 'ppc64le' and platform_machine != 's390x'
-iniconfig==2.3.0
+iniconfig==2.3.1
 jaraco-classes==3.4.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
 jaraco-context==6.1.2 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
 jaraco-functools==4.6.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x'
