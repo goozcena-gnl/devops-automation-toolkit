@@ -340,3 +340,47 @@ def test_provider_punctuation_preserves_export_contracts(
         surfaces.extend(members)
         surfaces.extend(archive.read(name).decode("utf-8") for name in members)
     assert all(fragment not in surface for fragment in fragments for surface in surfaces)
+
+
+def test_truncated_log_window_keeps_schema_and_evidence_locations(
+    repository_root: Path, tmp_path: Path
+) -> None:
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
+    pem = "-----BEGIN PRIVATE KEY-----\nSYNTHETIC_B02R_PEM_BODY\nSYNTHETIC_B02R_PE"
+    window = "tests failed\nexit code 137\n" + pem
+    (logs_dir / "job.log").write_bytes(f"{window}M_TAIL\n-----END PRIVATE KEY-----\n".encode())
+    report, logs, metadata = build_report(logs_dir=logs_dir, max_file_bytes=len(window.encode()))
+    expected = "tests failed\nexit code 137\n[REDACTED]\n\n\n[LOG TRUNCATED BY DEVOPS TOOLKIT]"
+    assert logs == {"job.log": expected}
+    assert expected.count("\n") == window.count("\n") + 1
+    lines = expected.splitlines()
+    locations = {finding.id: finding.evidence.line for finding in report.findings}
+    assert locations == {"CI-TEST-FAILURE": 1, "CI-OUT-OF-MEMORY": 2}
+    for finding in report.findings:
+        assert finding.evidence.summary == lines[finding.evidence.line - 1]
+    assert Redactor().redact_data(report.as_dict()) == report.as_dict()
+    schema_dir = repository_root / "configs/schemas"
+    finding_schema = json.loads((schema_dir / "finding.schema.json").read_text())
+    resource = Resource.from_contents(finding_schema)
+    registry = (
+        Registry()
+        .with_resource("finding.schema.json", resource)
+        .with_resource(finding_schema["$id"], resource)
+    )
+    validator = Draft202012Validator(
+        json.loads((schema_dir / "report.schema.json").read_text()), registry=registry
+    )
+    validator.validate(report.as_dict())
+    assert report.schema_version == "1.0"
+    bundle = tmp_path / "truncated-contract.zip"
+    write_bundle(bundle, report, logs, metadata)
+    surfaces = [report.model_dump_json(), json.dumps(metadata), *logs.values()]
+    surfaces.extend(render_report(report, fmt, color=False) for fmt in ReportFormat)
+    with zipfile.ZipFile(bundle) as archive:
+        bundled = json.loads(archive.read("report.json"))
+        validator.validate(bundled)
+        assert bundled == report.as_dict()
+        assert archive.read("logs/job.log").decode("utf-8") == expected
+        surfaces.extend(archive.read(name).decode("utf-8") for name in archive.namelist())
+    assert all("SYNTHETIC_B02R" not in surface for surface in surfaces)

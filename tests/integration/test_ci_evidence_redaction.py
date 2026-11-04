@@ -737,3 +737,59 @@ def test_provider_punctuation_never_reaches_cli_exports(
             surfaces.extend(members)
             surfaces.extend(archive.read(name).decode("utf-8") for name in members)
         assert all(fragment not in surface for fragment in fragments for surface in surfaces)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("report_format", ["console", "json", "markdown", "sarif"])
+def test_default_byte_limit_never_exports_cut_credentials(
+    tmp_path: Path, report_format: str
+) -> None:
+    head = "tests failed\nexit code 137\n"
+    filler = "." * 99 + "\n"
+    limit = 2_000_000
+    prefix = head + filler * ((limit - len(head)) // len(filler) - 1)
+    begin = "-----BEGIN PRIVATE KEY-----\n"
+    body = "SYNTHETIC_B02R_CLI_PEM_LINE\n"
+    pem = begin + body * 8 + "-----END PRIVATE KEY-----\nexit code 1\n"
+    url = "connect postgres://synthetic_user:SYNTHETIC_B02R_CLI_URL_" + "x" * 300
+    source = tmp_path / "logs"
+    source.mkdir()
+    (source / "pem.log").write_bytes((prefix + pem).encode())
+    (source / "url.log").write_bytes(f"{prefix}{url}@db.example.invalid/app\n".encode())
+    marker = "\n[LOG TRUNCATED BY DEVOPS TOOLKIT]"
+    kept_lines = (limit - len(prefix) - len(begin)) // len(body)
+    expected = {
+        "pem.log": prefix + "[REDACTED]" + "\n" * (1 + kept_lines) + marker,
+        "url.log": prefix + marker,
+    }
+    bundle = tmp_path / "truncated.zip"
+    args = [
+        sys.executable,
+        "-m",
+        "devops_toolkit",
+        "ci-evidence",
+        "--logs-dir",
+        str(source),
+        "--bundle",
+        str(bundle),
+        "--format",
+        report_format,
+        "--no-color",
+    ]
+    result = subprocess.run(args, capture_output=True, text=True, check=False, timeout=30)
+    assert result.returncode == 1
+    surfaces = [result.stdout, result.stderr]
+    with zipfile.ZipFile(bundle) as archive:
+        members = archive.namelist()
+        assert sorted(members) == ["logs/pem.log", "logs/url.log", "metadata.json", "report.json"]
+        for name, content in expected.items():
+            assert archive.read("logs/" + name).decode("utf-8") == content
+        report = json.loads(archive.read("report.json"))
+        assert report["schema_version"] == "1.0"
+        findings = report["findings"]
+        locations = {(item["resource"]["name"], item["evidence"]["line"]) for item in findings}
+        assert locations == {(name, line) for name in expected for line in (1, 2)}
+        surfaces.extend(archive.read(name).decode("utf-8") for name in members)
+    if report_format == "json":
+        assert json.loads(result.stdout) == report
+    assert all("SYNTHETIC_B02R" not in surface for surface in surfaces)
