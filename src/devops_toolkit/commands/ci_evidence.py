@@ -28,7 +28,7 @@ from devops_toolkit.core.models import (
     Severity,
     utc_now,
 )
-from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive
+from devops_toolkit.core.redaction import Redactor, fingerprint_sensitive, redact_truncated_tail
 from devops_toolkit.core.subprocess import executable_path, run_command
 from devops_toolkit.policies.engine import status_for_findings
 from devops_toolkit.reporters.json_report import render_json
@@ -232,7 +232,8 @@ def _collect_log_files(root: Path, *, max_file_bytes: int, max_total_bytes: int)
             raw = handle.read(read_size)
         text = raw.decode("utf-8", errors="replace")
         if read_size < size:
-            text += "\n[LOG TRUNCATED BY DEVOPS TOOLKIT]"
+            # A byte limit can split a credential below its detection pattern.
+            text = redact_truncated_tail(text) + "\n[LOG TRUNCATED BY DEVOPS TOOLKIT]"
         relative = path.relative_to(root).as_posix()
         collected[relative] = redactor.redact(text)
         total += read_size

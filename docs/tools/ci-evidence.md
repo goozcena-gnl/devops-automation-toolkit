@@ -17,6 +17,22 @@ Default credential keys such as `password`, `passwd`, `token`, `secret`, `api_ke
 including quoted values with spaces, nested objects/arrays, Unicode-escaped keys,
 and JSON embedded as an escaped string in a text log. Ordinary fields, timestamps,
 line numbers, and failure classifications remain available.
+Recognized credential names are masked in JSON keys, metadata and log
+assignments. Known prefixed examples include `GITHUB_TOKEN`, `db_password`,
+`x-api-key`, `SessionToken`, `private_key`, and `SSH_PASSPHRASE`.
+Other recognized CI/CD credential names include `GITLAB_TOKEN`, `NPM_TOKEN`,
+`CI_JOB_TOKEN`, `AZURE_CLIENT_SECRET` and `DOCKER_PASSWORD`. The names
+`max_token`, `has_secret`, `buildSecret`, `token_count`, and `secret_name` are
+not classified as credentials solely by their suffix; numeric and boolean
+report fields keep their original types. Arbitrary custom prefixes are not
+guaranteed to be recognized and need separate evidence or explicit rules.
+`Authorization` and `Proxy-Authorization` header values are masked for every
+scheme, wherever the header appears on a line, including quoted command
+arguments and JSON strings; masking stops at the end of the line or the
+enclosing quote so the surrounding JSON remains valid. For Bearer/Basic headers
+that contain extra whitespace-separated values, the remaining header value is
+masked too; diagnostic text on the same physical line is not guaranteed to be
+preserved.
 
 Local and downloaded metadata are sanitized before generating findings and report
 extensions. Provider JSON is parsed before structural redaction so text masking
@@ -52,6 +68,10 @@ both direct analysis and bundle writing. Collision retries have an explicit
 finite bound derived from the reserved file/directory sets.
 URL userinfo is masked before path components are split, including username-only
 userinfo; credential-bearing URLs cannot lose their scheme before masking.
+For HTTP(S) URLs any userinfo is masked. For other schemes, such as `postgres://`,
+`redis://`, `amqp://`, `ssh://`, or `jdbc:postgresql://`, userinfo carrying a
+password (`user:password@` or `:password@`) is masked, while username-only forms
+such as `ssh://git@host` remain readable.
 
 Direct `write_bundle()` calls use one original-to-sanitized filename mapping for
 ZIP members and the report's `CILog` resource names/identifiers, evidence locations,
@@ -128,6 +148,11 @@ An unterminated sensitive value is redacted through the remaining text rather
 than retaining a possible credential suffix. Keep a separate protected source
 copy if the original evidence is required. Unlabelled secrets or arbitrary
 encodings without a recognized credential key are not guaranteed to be detected.
+When a log exceeds the per-file byte limit, the collected window ends at the last
+complete line: the cut final line is dropped, and a private-key block whose END
+marker lies beyond the limit is masked from its BEGIN marker. Removed lines become
+LF placeholders before the `[LOG TRUNCATED BY DEVOPS TOOLKIT]` marker, so retained
+evidence keeps its original line numbers.
 Every boundary recognized by Python's `splitlines()` is counted when masking
 multiline values, malformed JSON, or private-key blocks, including CRLF as a single
 boundary, standalone CR, and Unicode line separators. Removed boundaries are
@@ -141,3 +166,18 @@ placeholders outside the closing quote. Pretty-printed PEM arrays retain JSON
 punctuation and surrounding nonsecret fields while their key material is removed.
 Literal U+2028/U+2029 and escaped separators remain parseable JSON; plain logs retain
 their original physical evidence-line correspondence.
+
+B02 v2.3 authorization hardening treats the first non-whitespace line after an
+`Authorization:` or `Proxy-Authorization:` header as its value, masking every
+fragment on that line. The whitespace before the value, including CRLF, remains
+byte-for-byte intact. For an unwrapped quoted header value, a closing quote does
+not establish a safe same-line suffix: the suffix is masked with the value.
+An enclosing command argument still bounds the header, preserving independent
+arguments such as a following URL. Headers inside valid JSON strings are handled
+in decoded form before the outer pass, retaining nested JSON structure and typed
+ordinary fields. The historical Bearer/Basic rule and custom marker behavior are
+unchanged. Empty headers followed by diagnostic text are ambiguous and may mask
+that first following line; arbitrary unlabelled later lines are not treated as
+header continuations. This targeted boundary does not discard the entire log.
+An empty header label in a quoted shell segment also consumes an immediately
+adjacent value segment; a space-separated argument remains independent.

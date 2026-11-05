@@ -38,9 +38,35 @@ SENSITIVE_KEYS = frozenset(
         "proxyauthorization",
     }
 )
+# Explicitly recognized prefixed credential names. Avoid treating arbitrary
+# numeric/boolean report fields (e.g. max_token or has_secret) as secrets.
+_ADDITIONAL_SENSITIVE_KEYS = frozenset(
+    {
+        "githubtoken",
+        "nodeauthtoken",
+        "dbpassword",
+        "awssecretaccesskey",
+        "awssessiontoken",
+        "sshpassphrase",
+        "sessiontoken",
+        "secretaccesskey",
+        "privatekey",
+        "passphrase",
+        "webhooksecret",
+        "xapikey",
+        "xauthorization",
+        # Standard CI/CD and cloud credential variables identified in private B02 review.
+        "gitlabtoken",
+        "npmtoken",
+        "cijobtoken",
+        "azureclientsecret",
+        "dockerpassword",
+    }
+)
 _ASSIGNMENT = re.compile(
     r"""(?:(?<!\\)(?P<quoted>\\*["'])(?P<name>(?:[\w-]|\\+u[0-9a-f]{4})+)(?P=quoted)"""
-    r"""|(?P<bare>\b(?:password|passwd|pwd|token|secret|api[_-]?key|client[_-]?secret)))"""
+    r"""|(?P<bare>(?<!\w)\w*?(?:password|passwd|pwd|token|secret|api[_-]?key|client[_-]?secret"""
+    r"""|private[_-]?key|passphrase|secret[_-]?access[_-]?key)))"""
     r"""(?P<separator>(?:\s|\\+[nrt])*[:=](?:\s|\\+[nrt])*)""",
     re.IGNORECASE,
 )
@@ -56,6 +82,15 @@ _PRIVATE_KEY = re.compile(
     r"-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----.*?"
     r"-----END(?: [A-Z0-9]+)? PRIVATE KEY-----",
     re.DOTALL,
+)
+_PRIVATE_KEY_BEGIN = re.compile(r"-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----")
+_PRIVATE_KEY_END = re.compile(r"-----END(?: [A-Z0-9]+)? PRIVATE KEY-----")
+# Any header position or scheme. Backslash runs are consumed whole, so the value stops
+# at a quote of any JSON depth, an escaped CR/LF or a line end; enclosing JSON strings
+# stay valid and matching stays linear. A literal marker is already redacted.
+_AUTHORIZATION_HEADER = re.compile(
+    r"(?<![\w-])(?P<name>[\w-]*?authorization[ \t]*:[ \t]*)",
+    re.IGNORECASE,
 )
 
 
@@ -184,13 +219,15 @@ def _redact_json_strings(text: str, sanitize: Callable[[str], str]) -> str:
         if (
             (
                 safe != decoded
+                or _AUTHORIZATION_HEADER.search(decoded)
                 or any(_assignment_is_sensitive(item) for item in _ASSIGNMENT.finditer(decoded))
             )
             and not verified
             and end < len(text)
             and text[end] not in _VALUE_WHITESPACE
         ):
-            # A sensitive JSON-looking token does not establish a separate tail.
+            # A sensitive JSON-looking token, including an empty header label,
+            # does not establish a separate tail from adjacent shell segments.
             end, _, _ = _shell_value_end(text, match.start())
         replacement = match[0] if safe == decoded else json.dumps(safe)
         parts.extend(
@@ -205,12 +242,13 @@ def _redact_json_strings(text: str, sanitize: Callable[[str], str]) -> str:
 
 
 def _sensitive_key(key: str) -> bool:
-    return key.casefold().replace("_", "").replace("-", "") in SENSITIVE_KEYS
+    normalized = key.casefold().replace("_", "").replace("-", "")
+    return normalized in SENSITIVE_KEYS or normalized in _ADDITIONAL_SENSITIVE_KEYS
 
 
 def _assignment_is_sensitive(match: re.Match[str]) -> bool:
     if match["bare"]:
-        return True
+        return _sensitive_key(match["bare"])
     name = match["name"]
     try:
         for _ in range(len(match["quoted"]).bit_length()):
@@ -401,6 +439,89 @@ def _redact_assignments(text: str, replacement: str) -> str:
     return "".join(parts)
 
 
+def _authorization_quote_end(text: str, start: int, quote: str, end: int) -> int:
+    """Return the position of a non-escaped closing quote, or end if unavailable."""
+    position = start
+    while position < end:
+        char = text[position]
+        if char == "\\":
+            position += 2
+            continue
+        if char == quote:
+            return position
+        position += 1
+    return end
+
+
+def _redact_authorization_values(text: str) -> str:
+    """Conservatively mask complete authorization values, including quoted Digest params."""
+    parts: list[str] = []
+    previous = 0
+    strings = (token for token, _ in _valid_json_strings(text))
+    token = next(strings, None)
+    for match in _AUTHORIZATION_HEADER.finditer(text):
+        if match.start() < previous:
+            continue
+        while token is not None and token.end() <= match.start():
+            token = next(strings, None)
+        if token is not None and token.start() < match.start() and match.end() <= token.end() - 1:
+            # Like assignments, headers inside valid strings were inspected decoded.
+            # Do not consume their enclosing JSON syntax on this outer pass.
+            continue
+        start = match.end()
+        # A value may start on the next line. Keep its exact whitespace/separators
+        # outside the edit, including CRLF; mask the complete first value line.
+        while start < len(text) and text[start].isspace():
+            start += 1
+        if text.startswith(DEFAULT_REPLACEMENT, start):
+            after = start + len(DEFAULT_REPLACEMENT)
+            # A previously fully masked header may be embedded in an escaped
+            # JSON string or quoted command. Do not eat the enclosing syntax or
+            # an escaped line break on subsequent redaction passes. A whitespace
+            # suffix, however, must still be redacted as possible credentials.
+            if after == len(text) or text[after] in "\r\n\v\f\x1c\x1d\x1e\x85\u2028\u2029\"'":
+                continue
+            if text[after] == "\\":
+                position = after
+                while position < len(text) and text[position] == "\\":
+                    position += 1
+                if position < len(text) and text[position] in ('"', "'", "n", "r"):
+                    continue
+        # Do not skip a masked prefix: a legacy Bearer/Basic rule may have
+        # redacted just its first token, leaving a second value on this line.
+        # Only a completely redacted value is safe to keep unchanged.
+        line_break = _LINE_BREAK.search(text, start)
+        line_end = line_break.start() if line_break else len(text)
+        if start == line_end:
+            continue
+
+        opener = text[match.start() - 1] if match.start() else ""
+        if opener in ("'", '"'):
+            # e.g. curl -H "Authorization: Digest response=\"...\""
+            end = _authorization_quote_end(text, start, opener, line_end)
+            replacement = DEFAULT_REPLACEMENT
+        elif text[start] in ("'", '"'):
+            # e.g. Authorization: "token CANARY"
+            quote = text[start]
+            close = _authorization_quote_end(text, start + 1, quote, line_end)
+            # A value quote does not establish an independent diagnostic tail.
+            # Consume any same-line suffix; command-wrapper quotes above still
+            # delimit a separate shell argument and preserve following context.
+            end = line_end
+            replacement = quote + DEFAULT_REPLACEMENT + (quote if close < line_end else "")
+        else:
+            # An unwrapped Digest header can contain internal quoted auth-params.
+            # Fail closed at the physical line boundary rather than exposing them.
+            end = line_end
+            replacement = DEFAULT_REPLACEMENT
+        if text[start:end] == replacement:
+            continue
+        parts.extend((text[previous:start], replacement))
+        previous = end
+    parts.append(text[previous:])
+    return "".join(parts)
+
+
 @dataclass(frozen=True)
 class RedactionRule:
     name: str
@@ -417,9 +538,16 @@ DEFAULT_RULES: tuple[RedactionRule, ...] = (
         re.compile(r"(?im)^(Authorization\s*:\s*)(?:Bearer|Basic)\s+[^\s]+"),
         r"\1[REDACTED]",
     ),
+    # Keep last: Redactor.redact and redact_path use DEFAULT_RULES[-1] as the URL boundary.
+    # Non-HTTP schemes are masked only when userinfo carries a password, so ssh://git@host
+    # and other username-only diagnostics remain readable.
     RedactionRule(
         "credential-url",
-        re.compile(r"""(?P<scheme>https?://)[^\s/"']+@""", re.IGNORECASE),
+        re.compile(
+            r"""(?P<scheme>https?://|(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*://"""
+            r"""(?=[^\s/"':@]*:[^\s/"']*@))[^\s/"']+@""",
+            re.IGNORECASE,
+        ),
         r"\g<scheme>[REDACTED]@",
     ),
 )
@@ -453,7 +581,7 @@ class Redactor:
                 # Finish the default boundary before the existing custom rules.
                 redacted = _redact_json_strings(redacted, self._redact_default_literal)
                 redacted = _redact_assignments(redacted, self._replacement)
-        return redacted
+        return _redact_authorization_values(redacted)
 
     def _redact_default_literal(self, value: str) -> str:
         """Inspect a decoded JSON string using only built-in credential rules."""
@@ -467,7 +595,7 @@ class Redactor:
                 replacement = self._replacement
             redacted = _sub_preserving_line_breaks(rule.pattern, replacement, redacted)
         redacted = _redact_json_strings(redacted, self._redact_default_literal)
-        return _redact_assignments(redacted, self._replacement)
+        return _redact_authorization_values(_redact_assignments(redacted, self._replacement))
 
     def redact_data(self, value: Any) -> Any:
         """Normalize then sanitize data; unknown objects become the replacement."""
@@ -573,3 +701,24 @@ def fingerprint_sensitive(value: str, namespace: str = "secret") -> str:
 
 def redact_text(value: str) -> str:
     return Redactor().redact(value)
+
+
+def redact_truncated_tail(value: str, replacement: str = DEFAULT_REPLACEMENT) -> str:
+    """Drop a cut final line and mask a private key whose END marker was cut off.
+
+    Apply before redaction to a bounded prefix of a larger source. Retained lines keep
+    their original numbers; removed private-key lines become LF placeholders.
+    """
+    end = 0
+    for line_break in _LINE_BREAK.finditer(value):
+        end = line_break.end()
+    value = value[:end]
+    # Text up to the last END is covered by the complete private-key rule; scanning END
+    # markers instead of whole blocks keeps many unterminated BEGIN markers linear.
+    complete = 0
+    for marker in _PRIVATE_KEY_END.finditer(value):
+        complete = marker.end()
+    begin = _PRIVATE_KEY_BEGIN.search(value, complete)
+    if begin is None:
+        return value
+    return value[: begin.start()] + _preserve_line_breaks(value[begin.start() :], replacement)

@@ -730,6 +730,43 @@ def test_structured_credentials_never_reach_reports_or_bundle(
         assert all(secret.split()[0] not in surface for surface in surfaces)
 
 
+@pytest.mark.parametrize(
+    ("cut", "rest", "kept"),
+    [
+        (
+            "-----BEGIN PRIVATE KEY-----\nSYNTHETIC_B02R_PEM_BODY\nSYNTHETIC_B02R_PEM_",
+            "TAIL\n-----END PRIVATE KEY-----\n",
+            "tests failed\n[REDACTED]\n\n",
+        ),
+        (
+            "connect postgres://synthetic_user:SYNTHETIC_B02R_URL",
+            "_TAIL@db.example.invalid/app\n",
+            "tests failed\n",
+        ),
+    ],
+)
+def test_truncated_logs_never_retain_cut_credentials(
+    tmp_path: Path, cut: str, rest: str, kept: str
+) -> None:
+    source = tmp_path / "logs"
+    source.mkdir()
+    window = f"tests failed\n{cut}"
+    (source / "job.log").write_bytes(f"{window}{rest}exit code 137\n".encode())
+    report, logs, metadata = build_report(logs_dir=source, max_file_bytes=len(window.encode()))
+    assert logs == {"job.log": kept + "\n[LOG TRUNCATED BY DEVOPS TOOLKIT]"}
+    assert [finding.id for finding in report.findings] == ["CI-TEST-FAILURE"]
+    assert report.findings[0].evidence.line == 1
+    assert report.schema_version == "1.0"
+    bundle = tmp_path / "truncated.zip"
+    write_bundle(bundle, report, logs, metadata)
+    surfaces = [report.model_dump_json(), json.dumps(metadata), *logs.values()]
+    surfaces.extend(render_report(report, fmt, color=False) for fmt in ReportFormat)
+    with zipfile.ZipFile(bundle) as archive:
+        surfaces.extend(archive.read(name).decode("utf-8") for name in archive.namelist())
+        assert json.loads(archive.read("report.json"))["schema_version"] == "1.0"
+    assert all("SYNTHETIC_B02R" not in surface for surface in surfaces)
+
+
 def test_direct_analysis_and_bundle_inputs_are_sanitized(tmp_path: Path) -> None:
     marker = "SYNTHETIC_DIRECT_B02"
     filename = f"password={marker}.log"
