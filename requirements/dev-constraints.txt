@@ -63,7 +63,7 @@ requests==2.34.2
 requests-toolbelt==1.0.0
 rfc3986==2.0.0
 rich==15.0.0
-rpds-py==2026.6.3
+rpds-py==2026.9.1
 ruff==0.17.1
 secretstorage==3.5.0 ; platform_machine != 'ppc64le' and platform_machine != 's390x' and sys_platform == 'linux'
 setuptools==84.1.0
