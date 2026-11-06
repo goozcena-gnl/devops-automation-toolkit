@@ -4,9 +4,9 @@ All notable changes are documented here. The format follows Keep a Changelog and
 
 ## [Unreleased]
 
-## [1.0.2] - Unreleased
+## [1.0.2] - 2026-11-06
 
-Release candidate prepared on 2026-11-05. It is not tagged or published; the latest published release remains 1.0.1. Replace `Unreleased` with the release date in the reviewed release commit before the `v1.0.2` tag is created.
+Maintenance release consolidating the security, packaging, quality and dependency changes documented below. Source version 1.0.2 does not by itself imply that a GitHub Release or distribution has been published; publication is tracked separately by the approved tag, release assets and their checksums.
 
 ### Security
 
