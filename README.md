@@ -2,7 +2,7 @@
 
 > An installable Python CLI that converts cloud and platform evidence into deterministic, redacted JSON, Markdown, and SARIF reports across 20 read-only-first tools.
 
-The immutable `v1.0.0` tag and its unpublished draft are retained as release history. The latest published release is version 1.0.1. Version 1.0.2 is under preparation as an unreleased maintenance candidate. Deterministic local and hosted checks do not replace target-environment validation.
+The immutable `v1.0.0` tag and its unpublished draft are retained as release history. This source checkout targets version 1.0.2; for the latest **published** version and verified distribution assets, consult GitHub Releases. A source version alone does not imply publication. Deterministic local and hosted checks do not replace target-environment validation.
 
 [![CI](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/ci.yml)
 [![Security](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/security.yml)
