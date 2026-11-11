@@ -11,6 +11,8 @@ from typing import Any
 
 import yaml
 
+from devops_toolkit.core.collection import CollectionState
+from devops_toolkit.core.exceptions import DependencyUnavailableError
 from devops_toolkit.core.models import (
     Confidence,
     Evidence,
@@ -21,6 +23,7 @@ from devops_toolkit.core.models import (
     Severity,
     utc_now,
 )
+from devops_toolkit.core.redaction import Redactor
 from devops_toolkit.core.subprocess import executable_path, run_command
 from devops_toolkit.policies.engine import status_for_findings
 from devops_toolkit.version import __version__
@@ -208,27 +211,85 @@ def analyze_yaml(root: Path, files: tuple[Path, ...]) -> list[Finding]:
     return findings
 
 
+def _validation_payload(stdout: str) -> tuple[dict[str, Any] | None, str]:
+    if not stdout.strip():
+        return None, "missing_json"
+    try:
+        payload = json.loads(stdout)
+    except (ValueError, RecursionError):
+        return None, "malformed_json"
+    if not isinstance(payload, dict) or not isinstance(payload.get("valid"), bool):
+        return None, "invalid_json_shape"
+    diagnostics = payload.get("diagnostics")
+    if not isinstance(diagnostics, list) or any(
+        not isinstance(item, dict) or item.get("severity") not in ("error", "warning")
+        for item in diagnostics
+    ):
+        return None, "invalid_json_shape"
+    errors = sum(item["severity"] == "error" for item in diagnostics)
+    error_count = payload.get("error_count", errors)
+    if type(error_count) is not int or error_count != errors:
+        return None, "invalid_error_count"
+    return payload, ""
+
+
+def _terraform_diagnostic(root: Path, diagnostic: dict[str, Any], redactor: Redactor) -> Finding:
+    severity = Severity.HIGH if diagnostic["severity"] == "error" else Severity.MEDIUM
+    range_data = diagnostic.get("range", {})
+    filename = str(range_data.get("filename", ".")) if isinstance(range_data, dict) else "."
+    start = range_data.get("start", {}) if isinstance(range_data, dict) else {}
+    raw_line = start.get("line") if isinstance(start, dict) else None
+    line = raw_line if type(raw_line) is int and raw_line > 0 else None
+    title = diagnostic.get("summary")
+    detail = diagnostic.get("detail")
+    return _finding(
+        "IAC-TF-VALIDATE",
+        severity,
+        redactor.redact(title)
+        if isinstance(title, str) and title
+        else "Terraform validation diagnostic",
+        redactor.redact(detail)
+        if isinstance(detail, str)
+        else "Correct the Terraform validation error.",
+        root / redactor.redact_path(filename),
+        root,
+        line=line,
+        confidence=Confidence.HIGH,
+    )
+
+
 def _terraform_validate_findings(
     root: Path, executable: str, timeout_seconds: int
 ) -> tuple[list[Finding], dict[str, Any], bool]:
     findings: list[Finding] = []
+    initialized = (root / ".terraform").exists()
     metadata: dict[str, Any] = {
         "executable": executable,
         "format_checked": False,
         "validated": False,
+        "validation_state": CollectionState.NOT_APPLICABLE,
+        "validation_reason": "not_initialized",
     }
-    partial = False
-    fmt = run_command(
-        [executable, "fmt", "-check", "-recursive", "-diff"],
-        cwd=root,
-        timeout_seconds=timeout_seconds,
-        max_output_chars=100_000,
-    )
+    try:
+        fmt = run_command(
+            [executable, "fmt", "-check", "-recursive", "-diff"],
+            cwd=root,
+            timeout_seconds=timeout_seconds,
+            max_output_chars=100_000,
+        )
+    except (DependencyUnavailableError, OSError):
+        if initialized:
+            metadata.update(
+                validation_state=CollectionState.FAILED, validation_reason="unavailable"
+            )
+        metadata["format_state"] = CollectionState.FAILED
+        return findings, metadata, True
+
     metadata["format_checked"] = True
     metadata["format_returncode"] = fmt.returncode
-    if fmt.timed_out:
-        partial = True
-    elif fmt.returncode != 0:
+    partial = fmt.timed_out or fmt.truncated
+    metadata["format_state"] = CollectionState.PARTIAL if partial else CollectionState.COMPLETE
+    if not fmt.timed_out and fmt.returncode != 0:
         findings.append(
             _finding(
                 "IAC-TF-FORMAT",
@@ -238,58 +299,49 @@ def _terraform_validate_findings(
                 root,
                 root,
                 confidence=Confidence.HIGH,
-                summary=fmt.stdout[:300]
-                or fmt.stderr[:300]
-                or "Formatting differs from canonical output.",
+                summary=f"Formatter exited with code {fmt.returncode}.",
             )
         )
-    if (root / ".terraform").exists():
+    if not initialized:
+        return findings, metadata, partial
+
+    try:
         validation = run_command(
             [executable, "validate", "-json"],
             cwd=root,
             timeout_seconds=timeout_seconds,
             max_output_chars=500_000,
+            sanitize_output=False,
         )
-        metadata["validated"] = True
-        metadata["validate_returncode"] = validation.returncode
-        if validation.timed_out:
-            partial = True
-        else:
-            try:
-                payload = json.loads(validation.stdout or "{}")
-            except json.JSONDecodeError:
-                payload = {}
-            diagnostics = payload.get("diagnostics", []) if isinstance(payload, dict) else []
-            for diagnostic in diagnostics if isinstance(diagnostics, list) else []:
-                if not isinstance(diagnostic, dict):
-                    continue
-                severity = (
-                    Severity.HIGH if diagnostic.get("severity") == "error" else Severity.MEDIUM
-                )
-                range_data = diagnostic.get("range", {})
-                filename = (
-                    str(range_data.get("filename", ".")) if isinstance(range_data, dict) else "."
-                )
-                start = range_data.get("start", {}) if isinstance(range_data, dict) else {}
-                raw_line = start.get("line") if isinstance(start, dict) else None
-                line = (
-                    int(raw_line)
-                    if isinstance(raw_line, int | str) and str(raw_line).isdigit()
-                    else None
-                )
-                findings.append(
-                    _finding(
-                        "IAC-TF-VALIDATE",
-                        severity,
-                        str(diagnostic.get("summary", "Terraform validation diagnostic")),
-                        str(diagnostic.get("detail", "Correct the Terraform validation error.")),
-                        root / filename,
-                        root,
-                        line=line,
-                        confidence=Confidence.HIGH,
-                    )
-                )
-    return findings, metadata, partial
+    except (DependencyUnavailableError, OSError):
+        metadata.update(validation_state=CollectionState.FAILED, validation_reason="unavailable")
+        return findings, metadata, True
+
+    metadata["validate_returncode"] = validation.returncode
+    if validation.timed_out or validation.truncated:
+        metadata.update(
+            validation_state=CollectionState.PARTIAL,
+            validation_reason="timeout" if validation.timed_out else "truncated",
+        )
+        return findings, metadata, True
+    payload, reason = _validation_payload(validation.stdout)
+    if payload is None:
+        metadata.update(validation_state=CollectionState.FAILED, validation_reason=reason)
+        return findings, metadata, True
+
+    redactor = Redactor()
+    diagnostics = [_terraform_diagnostic(root, item, redactor) for item in payload["diagnostics"]]
+    findings.extend(diagnostics)
+    has_errors = any(finding.severity is Severity.HIGH for finding in diagnostics)
+    if validation.succeeded and payload["valid"] and not has_errors:
+        metadata.update(
+            validated=True, validation_state=CollectionState.COMPLETE, validation_reason="validated"
+        )
+        return findings, metadata, partial
+
+    metadata.update(validation_state=CollectionState.FAILED, validation_reason="rejected")
+    conclusive_rejection = validation.returncode != 0 and not payload["valid"] and has_errors
+    return findings, metadata, partial or not conclusive_rejection
 
 
 def _optional_tool_findings(
@@ -360,7 +412,18 @@ def build_report(
         tool_results[tf_executable] = tf_metadata
         partial = partial or external_partial
     elif inventory.terraform_files:
-        tool_results["terraform-opentofu"] = {"available": False}
+        initialized = (root / ".terraform").exists()
+        tool_results["terraform-opentofu"] = {
+            "available": False,
+            "format_checked": False,
+            "format_state": CollectionState.FAILED,
+            "validated": False,
+            "validation_state": CollectionState.FAILED
+            if initialized
+            else CollectionState.NOT_APPLICABLE,
+            "validation_reason": "unavailable" if initialized else "not_initialized",
+        }
+        partial = True
     for chart in inventory.helm_charts:
         if executable_path("helm") is None:
             tool_results.setdefault("helm", {"available": False})

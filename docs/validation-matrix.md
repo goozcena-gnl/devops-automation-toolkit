@@ -27,6 +27,12 @@ This matrix traces every ranked tool to an implementation, invocation, automated
 
 ## Evidence boundary
 
+Collection completeness tests exercise empty and excluded Secret Sentinel scans,
+size limits and Git enumeration failures, and structured Terraform/OpenTofu
+validation outcomes. The synthetic validator tests verify exit codes and
+redaction in all report formats. The installed and module entry points are
+tested for the incomplete Secret Sentinel exit code.
+
 The Python analyzers, schema/report contracts, synthetic fixtures, fake CLI integrations, local Windows Python behavior, and native parser checks are deterministic release evidence. Hosted Ubuntu executes the Bash collector and ShellCheck; hosted Windows executes Workstation Doctor and PSScriptAnalyzer. Azure, AWS, private GitHub, production Kubernetes, Terraform/OpenTofu backends, enterprise Prometheus, private registries, and enterprise TLS remain target-environment validations.
 
 ## B02 security and evidence regressions
