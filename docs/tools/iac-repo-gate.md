@@ -42,9 +42,24 @@ deployment, or remediation commands.
 
 ## Partial evidence
 
-Missing optional tools are recorded as unavailable but do not make the report
-partial. Timeouts or incomplete validators mark the report as partial and return
-exit code `5` unless a higher-priority status applies.
+Missing auxiliary tools (Checkov, Trivy, yamllint, ansible-lint) remain optional.
+If Terraform files are present, a missing Terraform/OpenTofu executable leaves
+the formatting check incomplete. Semantic validation is `not_applicable` in
+an uninitialized directory. The gate does not initialize it.
+
+In `extensions.tools`, `validated` is true only when the validator exits
+successfully and emits a complete JSON result declaring the configuration
+valid with no error diagnostics. `validation_state` describes evidence
+coverage, whereas `validated` describes configuration validity. A complete
+structured rejection has `validation_state=complete`,
+`validation_reason=rejected`, `validated=false`, and the existing
+validation finding(s); it is not an incomplete collection. A contradictory
+exit code, validity flag, or diagnostic result uses
+`validation_state=failed` and `validation_reason=inconsistent_result`.
+Missing, malformed, truncated, timed-out, or unavailable results also mark
+coverage incomplete. Incomplete evidence returns exit code `5` unless a
+finding reaches the configured threshold, which still returns `1`.
+Unstructured validator output is not included in reports.
 
 ## Limitations
 

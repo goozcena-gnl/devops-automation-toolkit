@@ -5,10 +5,15 @@ from __future__ import annotations
 import json
 import math
 import re
+import stat
 from collections.abc import Iterable
 from dataclasses import dataclass
+from os import walk
 from pathlib import Path
+from typing import Literal
 
+from devops_toolkit.core.collection import CollectionState
+from devops_toolkit.core.exceptions import DependencyUnavailableError
 from devops_toolkit.core.models import (
     Confidence,
     Evidence,
@@ -186,31 +191,41 @@ def _looks_binary(data: bytes) -> bool:
     return b"\x00" in data[:8192]
 
 
-def _read_text(path: Path, max_file_bytes: int) -> str | None:
+def _read_text(
+    path: Path, max_file_bytes: int
+) -> (
+    tuple[str, None] | tuple[None, Literal["files_excluded", "files_oversized", "files_unreadable"]]
+):
     try:
-        if path.is_symlink():
-            return None
-        if path.stat().st_size > max_file_bytes:
-            return None
-        data = path.read_bytes()
-    except (OSError, PermissionError):
-        return None
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode):
+            return None, "files_excluded"
+        if info.st_size > max_file_bytes:
+            return None, "files_oversized"
+        with path.open("rb") as handle:
+            data = handle.read(max_file_bytes + 1)
+    except OSError:
+        return None, "files_unreadable"
+    if len(data) > max_file_bytes:
+        return None, "files_oversized"
     if _looks_binary(data):
-        return None
-    return data.decode("utf-8", errors="replace")
+        return None, "files_excluded"
+    return data.decode("utf-8", errors="replace"), None
 
 
-def _walk_files(root: Path, excluded_dirs: set[str]) -> Iterable[Path]:
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        try:
-            relative_parts = path.relative_to(root).parts
-        except ValueError:
-            continue
-        if any(part in excluded_dirs for part in relative_parts):
-            continue
-        yield path
+def _walk_files(root: Path, excluded_dirs: set[str], metrics: dict[str, int]) -> Iterable[Path]:
+    def record_error(_error: OSError) -> None:
+        metrics["inventory_errors"] += 1
+
+    for directory, subdirs, names in walk(root, onerror=record_error):
+        included = sorted(
+            name
+            for name in subdirs
+            if name not in excluded_dirs and not (Path(directory) / name).is_symlink()
+        )
+        metrics["directories_excluded"] += len(subdirs) - len(included)
+        subdirs[:] = included
+        yield from (Path(directory) / name for name in sorted(names))
 
 
 def _git_files(root: Path, *, include_ignored: bool, timeout_seconds: int) -> list[Path] | None:
@@ -221,7 +236,7 @@ def _git_files(root: Path, *, include_ignored: bool, timeout_seconds: int) -> li
         cwd=root,
         timeout_seconds=timeout_seconds,
     )
-    if not result.succeeded:
+    if not result.succeeded or result.truncated:
         return None
     relative_paths = {item for item in result.stdout.split("\x00") if item}
     if include_ignored:
@@ -230,7 +245,7 @@ def _git_files(root: Path, *, include_ignored: bool, timeout_seconds: int) -> li
             cwd=root,
             timeout_seconds=timeout_seconds,
         )
-        if not ignored.succeeded:
+        if not ignored.succeeded or ignored.truncated:
             return None
         relative_paths.update(item for item in ignored.stdout.split("\x00") if item)
     return [root / item for item in sorted(relative_paths)]
@@ -262,22 +277,45 @@ def scan_working_tree(
     excluded_dirs: set[str] | None = None,
 ) -> tuple[list[Finding], dict[str, int]]:
     exclusions = DEFAULT_EXCLUDED_DIRS | (excluded_dirs or set())
-    files = _git_files(root, include_ignored=include_ignored, timeout_seconds=timeout_seconds)
-    if files is None:
-        files = list(_walk_files(root, exclusions))
+    metrics = dict.fromkeys(
+        (
+            "files_scanned",
+            "files_skipped",
+            "files_excluded",
+            "directories_excluded",
+            "files_oversized",
+            "files_unreadable",
+            "inventory_errors",
+        ),
+        0,
+    )
+    files: Iterable[Path]
+    if (root / ".git").exists():
+        try:
+            git_files = _git_files(
+                root, include_ignored=include_ignored, timeout_seconds=timeout_seconds
+            )
+        except (DependencyUnavailableError, OSError):
+            git_files = None
+        if git_files is None:
+            metrics["inventory_errors"] += 1
+            return [], metrics
+        files = git_files
+    else:
+        files = _walk_files(root, exclusions, metrics)
     findings: list[Finding] = []
-    scanned = 0
-    skipped = 0
     for path in files:
         if any(part in exclusions for part in path.relative_to(root).parts):
+            metrics["files_excluded"] += 1
             continue
-        text = _read_text(path, max_file_bytes)
+        text, reason = _read_text(path, max_file_bytes)
         if text is None:
-            skipped += 1
+            metrics["files_skipped"] += 1
+            metrics[reason or "files_unreadable"] += 1
             continue
-        scanned += 1
+        metrics["files_scanned"] += 1
         findings.extend(scan_text(text, path.relative_to(root).as_posix()))
-    return findings, {"files_scanned": scanned, "files_skipped": skipped}
+    return findings, metrics
 
 
 def scan_git_history(
@@ -287,15 +325,21 @@ def scan_git_history(
     timeout_seconds: int = 30,
     excluded_dirs: set[str] | None = None,
 ) -> tuple[list[Finding], dict[str, int]]:
-    if not (root / ".git").exists() or max_commits <= 0:
+    if max_commits <= 0:
         return [], {"commits_scanned": 0}
-    revisions = run_command(
-        ["git", "rev-list", "--all", f"--max-count={max_commits}"],
-        cwd=root,
-        timeout_seconds=timeout_seconds,
-    )
-    if not revisions.succeeded:
-        return [], {"commits_scanned": 0}
+    unavailable = {"commits_scanned": 0, "history_enumeration_errors": 1}
+    if not (root / ".git").exists():
+        return [], unavailable
+    try:
+        revisions = run_command(
+            ["git", "rev-list", "--all", f"--max-count={max_commits}"],
+            cwd=root,
+            timeout_seconds=timeout_seconds,
+        )
+    except (DependencyUnavailableError, OSError):
+        return [], unavailable
+    if not revisions.succeeded or revisions.truncated:
+        return [], unavailable
     findings: list[Finding] = []
     failed = 0
     truncated = 0
@@ -304,23 +348,27 @@ def scan_git_history(
     normalized_exclusions = [value.replace("\\", "/").strip("/") for value in exclusions]
     excluded_pathspecs = [f":(exclude){value}" for value in sorted(normalized_exclusions) if value]
     for commit in commits:
-        result = run_command(
-            [
-                "git",
-                "show",
-                "--format=",
-                "--no-ext-diff",
-                "--unified=0",
-                commit,
-                "--",
-                ".",
-                *excluded_pathspecs,
-            ],
-            cwd=root,
-            timeout_seconds=timeout_seconds,
-            max_output_chars=5_000_000,
-            sanitize_output=False,
-        )
+        try:
+            result = run_command(
+                [
+                    "git",
+                    "show",
+                    "--format=",
+                    "--no-ext-diff",
+                    "--unified=0",
+                    commit,
+                    "--",
+                    ".",
+                    *excluded_pathspecs,
+                ],
+                cwd=root,
+                timeout_seconds=timeout_seconds,
+                max_output_chars=5_000_000,
+                sanitize_output=False,
+            )
+        except (DependencyUnavailableError, OSError):
+            failed += 1
+            continue
         if not result.succeeded:
             failed += 1
             continue
@@ -332,7 +380,31 @@ def scan_git_history(
         "commits_scanned": len(commits),
         "commits_failed": failed,
         "commits_truncated": truncated,
+        "history_enumeration_errors": 0,
     }
+
+
+def _working_tree_state(metrics: dict[str, int]) -> CollectionState:
+    if metrics["inventory_errors"] or metrics["files_oversized"] or metrics["files_unreadable"]:
+        return CollectionState.PARTIAL if metrics["files_scanned"] else CollectionState.FAILED
+    if not metrics["files_scanned"] and (
+        metrics["files_excluded"] or metrics["directories_excluded"]
+    ):
+        return CollectionState.INTENTIONALLY_EXCLUDED
+    return CollectionState.COMPLETE
+
+
+def _history_state(metrics: dict[str, int]) -> CollectionState:
+    if metrics.get("history_enumeration_errors"):
+        return CollectionState.FAILED
+    failed = metrics.get("commits_failed", 0)
+    if failed or metrics.get("commits_truncated"):
+        return (
+            CollectionState.PARTIAL
+            if metrics["commits_scanned"] > failed
+            else CollectionState.FAILED
+        )
+    return CollectionState.COMPLETE
 
 
 def build_report(
@@ -355,6 +427,10 @@ def build_report(
         timeout_seconds=timeout_seconds,
         excluded_dirs=excluded_dirs,
     )
+    collection = {
+        "working_tree": _working_tree_state(metrics),
+        "git_history": CollectionState.NOT_REQUESTED,
+    }
     if history:
         historical, history_metrics = scan_git_history(
             root,
@@ -364,6 +440,8 @@ def build_report(
         )
         findings.extend(historical)
         metrics.update(history_metrics)
+        if max_commits > 0:
+            collection["git_history"] = _history_state(history_metrics)
     baseline_fingerprints = _load_baseline(baseline)
     deduplicated: dict[str, Finding] = {}
     for finding in findings:
@@ -375,7 +453,7 @@ def build_report(
         deduplicated.values(),
         key=lambda item: (item.evidence.location or "", item.evidence.line or 0, item.id),
     )
-    history_partial = bool(metrics.get("commits_failed", 0) or metrics.get("commits_truncated", 0))
+    partial = any(state.incomplete for state in collection.values())
     completed = utc_now()
     return Report(
         metadata=ReportMetadata(
@@ -384,10 +462,10 @@ def build_report(
             started_at=started,
             completed_at=completed,
             target=str(root.resolve()),
-            partial=history_partial,
+            partial=partial,
             capabilities=["working-tree", "git-history", "redaction", "sarif", "baseline"],
         ),
         findings=final_findings,
-        status=status_for_findings(final_findings, threshold, partial=history_partial),
-        extensions={"metrics": metrics, "history_enabled": history},
+        status=status_for_findings(final_findings, threshold, partial=partial),
+        extensions={"metrics": metrics, "history_enabled": history, "collection": collection},
     )
