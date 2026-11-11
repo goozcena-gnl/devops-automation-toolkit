@@ -210,6 +210,7 @@ def test_terraform_inconsistent_structured_result_remains_incomplete(
     assert report.extensions["tools"]["tofu"]["validation_reason"] == "inconsistent_result"
     assert report.status == ("fail" if error_count else "warning")
 
+
 @pytest.mark.parametrize(
     ("overrides", "reason"),
     [
