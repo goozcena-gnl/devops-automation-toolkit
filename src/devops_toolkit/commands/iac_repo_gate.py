@@ -341,9 +341,7 @@ def _terraform_validate_findings(
 
     conclusive_rejection = validation.returncode != 0 and not payload["valid"] and has_errors
     if conclusive_rejection:
-        metadata.update(
-            validation_state=CollectionState.COMPLETE, validation_reason="rejected"
-        )
+        metadata.update(validation_state=CollectionState.COMPLETE, validation_reason="rejected")
         return findings, metadata, partial
 
     metadata.update(
