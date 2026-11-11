@@ -8,9 +8,9 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
 from devops_toolkit.commands import gha_guard, iac_repo_gate, kube_triage, secret_sentinel
+from devops_toolkit.commands.common import exit_code_for_report
 from devops_toolkit.core.models import Severity
 from devops_toolkit.core.subprocess import CommandResult
-from devops_toolkit.commands.common import exit_code_for_report
 
 
 def _validator(repository_root: Path) -> Draft202012Validator:
