@@ -6,7 +6,7 @@ This matrix traces every ranked tool to an implementation, invocation, automated
 |---|---|---|---|---|---|---|
 | Secret Sentinel | `commands/secret_sentinel.py` | `devops-toolkit secret-sentinel` | unit, CLI, Git-history integration | `docs/tools/secret-sentinel.md` | `examples/reports/phase3/secret-sentinel.json` | Complete |
 | Workstation Doctor | `scripts/workstation/devops-workstation-audit.ps1` | PowerShell script | parser, hosted Windows smoke/schema, release contract | `docs/tools/workstation-doctor.md` | `examples/reports/phase3/workstation-doctor.json` | Complete |
-| IaC Repository Gate | `commands/iac_repo_gate.py` | `devops-toolkit iac-repo-gate` | unit, CLI, report contract | `docs/tools/iac-repo-gate.md` | `examples/reports/phase3/iac-repo-gate.json` | Complete |
+| IaC Repository Gate | `commands/iac_repo_gate.py` | `devops-toolkit iac-repo-gate` | unit, CLI, versioned JSON contract snapshots, fake-validator CLI integration | `docs/tools/iac-repo-gate.md` | `examples/reports/phase3/iac-repo-gate.json` plus `iac-repo-gate-complete.json` / `iac-repo-gate-incomplete.json` | Complete |
 | GitHub Actions Guard | `commands/gha_guard.py` | `devops-toolkit gha-guard` | unit, CLI, self-audit | `docs/tools/gha-guard.md` | `examples/reports/phase3/gha-guard.sarif` | Complete |
 | Kubernetes Triage | `commands/kube_triage.py` | `devops-toolkit kube-triage` | unit, CLI, fake-kubectl integration | `docs/tools/kube-triage.md` | `examples/reports/phase3/kube-triage.json` | Complete |
 | Terraform Plan Risk Analyzer | `commands/plan_risk.py` | `devops-toolkit plan-risk` | unit, CLI, report contract | `docs/tools/plan-risk.md` | `examples/reports/phase4/plan-risk.json` | Complete |
@@ -30,7 +30,13 @@ This matrix traces every ranked tool to an implementation, invocation, automated
 Collection completeness tests exercise empty and excluded Secret Sentinel scans,
 size limits and Git enumeration failures, and structured Terraform/OpenTofu
 validation outcomes. The synthetic validator tests verify exit codes and
-redaction in all report formats. The installed and module entry points are
+redaction in all report formats. Terraform/OpenTofu validation JSON contract evidence additionally covers required
+format and counters, a compatible successful validation and missing-version
+incomplete evidence. Both outcomes are compared against checked-in synthetic
+report snapshots by contract tests; a fake POSIX executable exercises the full
+CLI/subprocess boundary without contacting providers or initializing backends.
+The original IaC example remains an intentionally uninitialized reference.
+The installed and module entry points are
 tested for the incomplete Secret Sentinel exit code.
 
 The Python analyzers, schema/report contracts, synthetic fixtures, fake CLI integrations, local Windows Python behavior, and native parser checks are deterministic release evidence. Hosted Ubuntu executes the Bash collector and ShellCheck; hosted Windows executes Workstation Doctor and PSScriptAnalyzer. Azure, AWS, private GitHub, production Kubernetes, Terraform/OpenTofu backends, enterprise Prometheus, private registries, and enterprise TLS remain target-environment validations.

@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "iac-repo-gate",
+    "tool_version": "1.0.2",
+    "started_at": "2026-11-11T00:00:00Z",
+    "completed_at": "2026-11-11T00:00:00Z",
+    "target": "synthetic/iac-validate",
+    "partial": true,
+    "capabilities": [
+      "terraform",
+      "opentofu",
+      "yaml",
+      "helm",
+      "ansible",
+      "sarif"
+    ]
+  },
+  "findings": [],
+  "status": "warning",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 0,
+    "high": 0,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 0
+  },
+  "extensions": {
+    "inventory": {
+      "technologies": [
+        "terraform-opentofu"
+      ],
+      "terraform_files": 1,
+      "yaml_files": 0,
+      "ansible_files": 0,
+      "helm_charts": 0
+    },
+    "tools": {
+      "tofu": {
+        "executable": "tofu",
+        "format_checked": true,
+        "validated": false,
+        "validation_state": "failed",
+        "validation_reason": "invalid_format_version",
+        "format_returncode": 0,
+        "format_state": "complete",
+        "validate_returncode": 0
+      }
+    }
+  }
+}
