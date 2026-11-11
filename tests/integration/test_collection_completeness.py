@@ -40,6 +40,7 @@ def test_cli_reports_incomplete_secret_collection(tmp_path: Path, installed: boo
     assert report["schema_version"] == "1.0"
     assert report["metadata"]["partial"]
 
+
 @pytest.mark.integration
 @pytest.mark.skipif(os.name == "nt", reason="synthetic POSIX executable uses a Python shebang")
 @pytest.mark.parametrize(
@@ -108,6 +109,4 @@ def test_iac_real_cli_invokes_synthetic_terraform_validator(
     assert report["metadata"]["partial"] is (not has_version)
     assert tools["validated"] is has_version
     assert tools["validation_state"] == ("complete" if has_version else "failed")
-    assert tools["validation_reason"] == (
-        "validated" if has_version else "invalid_format_version"
-    )
+    assert tools["validation_reason"] == ("validated" if has_version else "invalid_format_version")

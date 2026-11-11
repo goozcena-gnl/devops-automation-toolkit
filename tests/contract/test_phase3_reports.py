@@ -60,6 +60,7 @@ def test_phase3_python_reports_match_report_contract(
     for report in reports:
         validator.validate(report.as_dict())
 
+
 @pytest.mark.contract
 @pytest.mark.parametrize(
     ("scenario", "has_version", "expected_exit"),
