@@ -49,12 +49,17 @@ an uninitialized directory. The gate does not initialize it.
 
 In `extensions.tools`, `validated` is true only when the validator exits
 successfully and emits a complete JSON result declaring the configuration
-valid with no error diagnostics. `validation_state` and `validation_reason`
-explain unavailable, missing, malformed, truncated, timed-out, or rejected
-results. Complete error diagnostics produce the existing validation findings.
-Incomplete evidence returns exit code `5` unless a finding reaches the
-configured threshold, which still returns `1`. Unstructured validator output
-is not included in reports.
+valid with no error diagnostics. `validation_state` describes evidence
+coverage, whereas `validated` describes configuration validity. A complete
+structured rejection has `validation_state=complete`,
+`validation_reason=rejected`, `validated=false`, and the existing
+validation finding(s); it is not an incomplete collection. A contradictory
+exit code, validity flag, or diagnostic result uses
+`validation_state=failed` and `validation_reason=inconsistent_result`.
+Missing, malformed, truncated, timed-out, or unavailable results also mark
+coverage incomplete. Incomplete evidence returns exit code `5` unless a
+finding reaches the configured threshold, which still returns `1`.
+Unstructured validator output is not included in reports.
 
 ## Limitations
 

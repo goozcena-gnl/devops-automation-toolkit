@@ -156,7 +156,16 @@ def test_terraform_diagnostic_retains_finding_without_secret(
     assert report.status == "fail"
     assert not report.metadata.partial
     assert not report.extensions["tools"]["tofu"]["validated"]
-    assert report.extensions["tools"]["tofu"]["validation_state"] == "failed"
+    assert report.extensions["tools"]["tofu"]["validation_state"] == "complete"
+    assert report.extensions["tools"]["tofu"]["validation_reason"] == "rejected"
+    result = CliRunner().invoke(
+        app, ["iac-repo-gate", str(terraform_project), "--no-optional-tools", "--format", "json"]
+    )
+    assert result.exit_code == 1, result.output
+    cli_report = json.loads(result.stdout)
+    assert cli_report["metadata"]["partial"] is False
+    assert cli_report["extensions"]["tools"]["tofu"]["validation_state"] == "complete"
+    assert cli_report["extensions"]["tools"]["tofu"]["validated"] is False
     (finding,) = report.findings
     assert finding.id == "IAC-TF-VALIDATE"
     assert finding.evidence.location == "main.tf"
@@ -164,3 +173,30 @@ def test_terraform_diagnostic_retains_finding_without_secret(
     assert "Invalid argument" in finding.title
     for fmt in ReportFormat:
         assert canary not in render_report(report, fmt, color=False)
+
+@pytest.mark.parametrize(
+    ("returncode", "valid", "error_count"),
+    [(0, False, 1), (1, True, 0)],
+)
+def test_terraform_inconsistent_structured_result_remains_incomplete(
+    terraform_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    returncode: int,
+    valid: bool,
+    error_count: int,
+) -> None:
+    diagnostics = (
+        [{"severity": "error", "summary": "Synthetic validation error"}]
+        if error_count
+        else []
+    )
+    payload = json.dumps(
+        {"valid": valid, "error_count": error_count, "diagnostics": diagnostics}
+    )
+    _validator(monkeypatch, CommandResult((), returncode, payload, ""))
+    report = iac_repo_gate.build_report(terraform_project, run_optional_tools=False)
+    assert report.metadata.partial
+    assert not report.extensions["tools"]["tofu"]["validated"]
+    assert report.extensions["tools"]["tofu"]["validation_state"] == "failed"
+    assert report.extensions["tools"]["tofu"]["validation_reason"] == "inconsistent_result"
+    assert report.status == ("fail" if error_count else "warning")
