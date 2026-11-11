@@ -96,6 +96,18 @@ def _validator(monkeypatch: pytest.MonkeyPatch, result: CommandResult) -> None:
     monkeypatch.setattr(iac_repo_gate, "run_command", run)
 
 
+def _validation_json(**overrides: object) -> str:
+    payload: dict[str, object] = {
+        "format_version": "1.0",
+        "valid": True,
+        "error_count": 0,
+        "warning_count": 0,
+        "diagnostics": [],
+    }
+    payload.update(overrides)
+    return json.dumps(payload)
+
+
 @pytest.mark.parametrize(
     ("returncode", "stdout", "timed_out", "truncated", "state"),
     [
@@ -103,10 +115,10 @@ def _validator(monkeypatch: pytest.MonkeyPatch, result: CommandResult) -> None:
         (0, "", False, False, "failed"),
         (0, "{", False, False, "failed"),
         (0, "{}", False, False, "failed"),
-        (0, '{"valid":true,"diagnostics":[null]}', False, False, "failed"),
-        (0, '{"valid":true,"diagnostics":[]}', False, True, "partial"),
+        (0, _validation_json(diagnostics=[None]), False, False, "failed"),
+        (0, _validation_json(), False, True, "partial"),
         (124, "", True, False, "partial"),
-        (0, '{"valid":true,"diagnostics":[]}', False, False, "complete"),
+        (0, _validation_json(), False, False, "complete"),
     ],
 )
 def test_terraform_requires_successful_structured_validation(
@@ -150,7 +162,7 @@ def test_terraform_diagnostic_retains_finding_without_secret(
         "detail": f"Unexpected value {canary}",
         "range": {"filename": "main.tf", "start": {"line": 1}},
     }
-    payload = json.dumps({"valid": False, "error_count": 1, "diagnostics": [diagnostic]})
+    payload = _validation_json(valid=False, error_count=1, diagnostics=[diagnostic])
     _validator(monkeypatch, CommandResult((), 1, payload, canary))
     report = iac_repo_gate.build_report(terraform_project, run_optional_tools=False)
     assert report.status == "fail"
@@ -189,7 +201,7 @@ def test_terraform_inconsistent_structured_result_remains_incomplete(
     diagnostics = (
         [{"severity": "error", "summary": "Synthetic validation error"}] if error_count else []
     )
-    payload = json.dumps({"valid": valid, "error_count": error_count, "diagnostics": diagnostics})
+    payload = _validation_json(valid=valid, error_count=error_count, diagnostics=diagnostics)
     _validator(monkeypatch, CommandResult((), returncode, payload, ""))
     report = iac_repo_gate.build_report(terraform_project, run_optional_tools=False)
     assert report.metadata.partial
@@ -197,3 +209,79 @@ def test_terraform_inconsistent_structured_result_remains_incomplete(
     assert report.extensions["tools"]["tofu"]["validation_state"] == "failed"
     assert report.extensions["tools"]["tofu"]["validation_reason"] == "inconsistent_result"
     assert report.status == ("fail" if error_count else "warning")
+
+@pytest.mark.parametrize(
+    ("overrides", "reason"),
+    [
+        ({"format_version": None}, "invalid_format_version"),
+        ({"format_version": "1.invalid"}, "invalid_format_version"),
+        ({"format_version": "2.0"}, "unsupported_format_version"),
+        ({"error_count": None}, "invalid_error_count"),
+        ({"error_count": -1}, "invalid_error_count"),
+        ({"error_count": True}, "invalid_error_count"),
+        ({"error_count": 1}, "invalid_error_count"),
+        ({"warning_count": None}, "invalid_warning_count"),
+        ({"warning_count": -1}, "invalid_warning_count"),
+        ({"warning_count": True}, "invalid_warning_count"),
+        ({"warning_count": 1}, "invalid_warning_count"),
+        ({"valid": False}, "invalid_validity"),
+    ],
+)
+def test_terraform_rejects_inconsistent_validation_contract(
+    terraform_project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    overrides: dict[str, object],
+    reason: str,
+) -> None:
+    _validator(monkeypatch, CommandResult((), 0, _validation_json(**overrides), ""))
+    result = CliRunner().invoke(
+        app, ["iac-repo-gate", str(terraform_project), "--no-optional-tools", "--format", "json"]
+    )
+    assert result.exit_code == 5, result.output
+    report = json.loads(result.stdout)
+    assert report["metadata"]["partial"] is True
+    metadata = report["extensions"]["tools"]["tofu"]
+    assert metadata["validated"] is False
+    assert metadata["validation_state"] == "failed"
+    assert metadata["validation_reason"] == reason
+
+
+@pytest.mark.parametrize("field", ["format_version", "error_count", "warning_count"])
+def test_terraform_requires_version_and_counters(
+    terraform_project: Path, monkeypatch: pytest.MonkeyPatch, field: str
+) -> None:
+    payload = json.loads(_validation_json())
+    payload.pop(field)
+    _validator(monkeypatch, CommandResult((), 0, json.dumps(payload), ""))
+    report = iac_repo_gate.build_report(terraform_project, run_optional_tools=False)
+    assert report.metadata.partial is True
+    assert report.status == "warning"
+    metadata = report.extensions["tools"]["tofu"]
+    assert metadata["validated"] is False
+    assert metadata["validation_reason"] == f"invalid_{field}"
+
+
+@pytest.mark.parametrize("version", ["1.0", "1.1", "1.25"])
+def test_terraform_accepts_minor_version_and_additive_fields(
+    terraform_project: Path, monkeypatch: pytest.MonkeyPatch, version: str
+) -> None:
+    payload = _validation_json(format_version=version, future_property={"example": True})
+    _validator(monkeypatch, CommandResult((), 0, payload, ""))
+    report = iac_repo_gate.build_report(terraform_project, run_optional_tools=False)
+    assert report.status == "pass"
+    assert report.metadata.partial is False
+    assert report.extensions["tools"]["tofu"]["validated"] is True
+
+
+def test_terraform_ignores_unknown_diagnostic_severity(
+    terraform_project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = _validation_json(
+        diagnostics=[{"severity": "experimental", "summary": "Future diagnostic"}]
+    )
+    _validator(monkeypatch, CommandResult((), 0, payload, ""))
+    report = iac_repo_gate.build_report(terraform_project, run_optional_tools=False)
+    assert report.status == "pass"
+    assert report.metadata.partial is False
+    assert report.extensions["tools"]["tofu"]["validated"] is True
+    assert not report.findings

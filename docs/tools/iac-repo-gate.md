@@ -49,8 +49,14 @@ an uninitialized directory. The gate does not initialize it.
 
 In `extensions.tools`, `validated` is true only when the validator exits
 successfully and emits a complete JSON result declaring the configuration
-valid with no error diagnostics. `validation_state` describes evidence
-coverage, whereas `validated` describes configuration validity. A complete
+valid with no error diagnostics. A complete validation JSON must contain
+`format_version` (supported major `1`), `valid`, non-negative integer
+`error_count` and `warning_count`, and a `diagnostics` list consistent
+with those counters and the validity flag. Compatible minor versions and
+additive fields remain allowed. Unknown diagnostic severities are ignored.
+Missing or inconsistent fields, or unsupported major versions, are incomplete
+evidence and never mark the configuration valid. `validation_state`
+describes evidence coverage, whereas `validated` describes validity. A complete
 structured rejection has `validation_state=complete`,
 `validation_reason=rejected`, `validated=false`, and the existing
 validation finding(s); it is not an incomplete collection. A contradictory
