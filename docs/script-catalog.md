@@ -10,7 +10,7 @@ This catalog remains the complete 20-tool inventory.
 |---:|---|---|---|---|
 | 1 | secret-sentinel | `devops-toolkit secret-sentinel` | Implemented | Working-tree and Git-history coverage, redaction, SARIF |
 | 2 | workstation-doctor | `scripts/workstation/devops-workstation-audit.ps1` | Implemented | PowerShell 7, Windows APIs |
-| 3 | iac-repo-gate | `devops-toolkit iac-repo-gate` | Implemented | Built-in checks, explicit Terraform/OpenTofu validation coverage |
+| 3 | iac-repo-gate | `devops-toolkit iac-repo-gate` | Implemented | Built-in checks, versioned Terraform/OpenTofu validation evidence and schema-stable reports |
 | 4 | gha-guard | `devops-toolkit gha-guard` | Implemented | YAML parser, SARIF |
 | 5 | kube-triage | `devops-toolkit kube-triage` | Implemented | kubectl, Kubernetes read access |
 | 6 | plan-risk | `devops-toolkit plan-risk` | Implemented | Terraform/OpenTofu plan JSON |

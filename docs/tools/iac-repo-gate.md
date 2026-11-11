@@ -49,8 +49,14 @@ an uninitialized directory. The gate does not initialize it.
 
 In `extensions.tools`, `validated` is true only when the validator exits
 successfully and emits a complete JSON result declaring the configuration
-valid with no error diagnostics. `validation_state` describes evidence
-coverage, whereas `validated` describes configuration validity. A complete
+valid with no error diagnostics. A complete validation JSON must contain
+`format_version` (supported major `1`), `valid`, non-negative integer
+`error_count` and `warning_count`, and a `diagnostics` list consistent
+with those counters and the validity flag. Compatible minor versions and
+additive fields remain allowed. Unknown diagnostic severities are ignored.
+Missing or inconsistent fields, or unsupported major versions, are incomplete
+evidence and never mark the configuration valid. `validation_state`
+describes evidence coverage, whereas `validated` describes validity. A complete
 structured rejection has `validation_state=complete`,
 `validation_reason=rejected`, `validated=false`, and the existing
 validation finding(s); it is not an incomplete collection. A contradictory
@@ -66,3 +72,19 @@ Unstructured validator output is not included in reports.
 Built-in Terraform analysis is intentionally conservative and is not a full HCL
 semantic evaluator. Provider-specific policy depth comes from optional scanners
 and later toolkit phases.
+
+## Synthetic validation evidence
+
+- [Complete validation report](../../examples/reports/phase3/iac-repo-gate-complete.json):
+  a simulated `tofu validate -json` response with version and counters,
+  `validated=true`, `validation_state=complete`, and exit code `0`.
+- [Incomplete validation report](../../examples/reports/phase3/iac-repo-gate-incomplete.json):
+  a simulated response missing `format_version`, `validated=false`,
+  `validation_state=failed`, `metadata.partial=true`, and exit code `5`.
+- [Historical uninitialized example](../../examples/reports/phase3/iac-repo-gate.json):
+  `validation_state=not_applicable` because no backend initialization is done.
+
+These reports are deterministic synthetic evidence and are schema-checked and
+snapshot-compared in `tests/contract/test_phase3_reports.py`. An isolated
+fake-validator executable verifies the CLI subprocess boundary on Ubuntu.
+No actual Terraform/OpenTofu provider or cloud environment was queried.

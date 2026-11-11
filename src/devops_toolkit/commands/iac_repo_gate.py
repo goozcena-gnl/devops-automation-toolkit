@@ -220,16 +220,31 @@ def _validation_payload(stdout: str) -> tuple[dict[str, Any] | None, str]:
         return None, "malformed_json"
     if not isinstance(payload, dict) or not isinstance(payload.get("valid"), bool):
         return None, "invalid_json_shape"
+    version = payload.get("format_version")
+    if not isinstance(version, str) or not re.fullmatch(
+        r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version
+    ):
+        return None, "invalid_format_version"
+    if version.split(".", 1)[0] != "1":
+        return None, "unsupported_format_version"
     diagnostics = payload.get("diagnostics")
     if not isinstance(diagnostics, list) or any(
-        not isinstance(item, dict) or item.get("severity") not in ("error", "warning")
+        not isinstance(item, dict) or not isinstance(item.get("severity"), str)
         for item in diagnostics
     ):
         return None, "invalid_json_shape"
+    for field in ("error_count", "warning_count"):
+        value = payload.get(field)
+        if type(value) is not int or value < 0:
+            return None, f"invalid_{field}"
     errors = sum(item["severity"] == "error" for item in diagnostics)
-    error_count = payload.get("error_count", errors)
-    if type(error_count) is not int or error_count != errors:
+    warnings = sum(item["severity"] == "warning" for item in diagnostics)
+    if payload["error_count"] != errors:
         return None, "invalid_error_count"
+    if payload["warning_count"] != warnings:
+        return None, "invalid_warning_count"
+    if payload["valid"] != (errors == 0):
+        return None, "invalid_validity"
     return payload, ""
 
 
@@ -330,7 +345,11 @@ def _terraform_validate_findings(
         return findings, metadata, True
 
     redactor = Redactor()
-    diagnostics = [_terraform_diagnostic(root, item, redactor) for item in payload["diagnostics"]]
+    diagnostics = [
+        _terraform_diagnostic(root, item, redactor)
+        for item in payload["diagnostics"]
+        if item["severity"] in ("error", "warning")
+    ]
     findings.extend(diagnostics)
     has_errors = any(finding.severity is Severity.HIGH for finding in diagnostics)
     if validation.succeeded and payload["valid"] and not has_errors:
