@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "kube-triage",
+    "tool_version": "1.0.2",
+    "started_at": "2026-01-01T00:00:00Z",
+    "completed_at": "2026-01-01T00:00:00Z",
+    "target": "development-cluster",
+    "partial": true,
+    "capabilities": [
+      "nodes",
+      "workloads",
+      "events",
+      "storage",
+      "endpoints",
+      "sanitized-bundle"
+    ]
+  },
+  "findings": [
+    {
+      "id": "KUBE-COLLECTION-INCOMPLETE",
+      "tool": "kube-triage",
+      "category": "kubernetes",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Unable to collect Kubernetes resource `pods`",
+      "description": "Kubernetes read-only evidence indicates a workload or cluster health issue.",
+      "recommendation": "Verify RBAC permissions, API availability, selected context, namespace scope, and network connectivity.",
+      "fingerprint": "sha256:8700ba6749453883bc5b40dd8e0d8d5ffbee9a1e91091b625f825e16047ed0a8",
+      "resource": {
+        "type": "Collection",
+        "name": "pods"
+      },
+      "evidence": {
+        "summary": "kubectl response contains a resource outside the authorized scope"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "warning",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 1,
+    "high": 0,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 1
+  },
+  "extensions": {
+    "scope": {
+      "namespace": "default",
+      "all_namespaces": false,
+      "cluster_scoped": false
+    },
+    "collection_exclusions": {
+      "nodes": "intentionally_excluded"
+    },
+    "collection_errors": {
+      "pods": "kubectl response contains a resource outside the authorized scope"
+    },
+    "resource_counts": {
+      "deployments": 0,
+      "statefulsets": 0,
+      "daemonsets": 0,
+      "jobs": 0,
+      "pvcs": 0,
+      "events": 0,
+      "endpoints": 0
+    }
+  }
+}

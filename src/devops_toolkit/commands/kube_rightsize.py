@@ -8,11 +8,12 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from devops_toolkit.commands.kube_triage import resolve_context
-from devops_toolkit.core.exceptions import (
-    CommandExecutionError,
-    ConfigurationError,
-    DependencyUnavailableError,
+from devops_toolkit.core.exceptions import ConfigurationError
+from devops_toolkit.core.kubernetes import (
+    DEFAULT_KUBERNETES_READ_POLICY,
+    KubernetesReadPolicy,
+    read_list,
+    resource_path,
 )
 from devops_toolkit.core.models import (
     Confidence,
@@ -24,8 +25,8 @@ from devops_toolkit.core.models import (
     Severity,
     utc_now,
 )
-from devops_toolkit.core.safety import SafetyPolicy, require_safe_target
-from devops_toolkit.core.subprocess import executable_path, run_command
+from devops_toolkit.core.redaction import Redactor
+from devops_toolkit.core.safety import SafetyPolicy
 from devops_toolkit.policies.engine import status_for_findings
 from devops_toolkit.version import __version__
 
@@ -100,59 +101,55 @@ def _read_snapshot(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _kubectl_json(args: list[str], *, context: str, timeout_seconds: int) -> dict[str, Any]:
-    if executable_path("kubectl") is None:
-        raise DependencyUnavailableError("Required executable is unavailable: kubectl")
-    result = run_command(
-        ["kubectl", "--context", context, *args, "-o", "json"],
-        timeout_seconds=timeout_seconds,
-        max_output_chars=20_000_000,
-    )
-    if not result.succeeded:
-        raise CommandExecutionError(
-            f"kubectl collection failed: {(result.stderr or result.stdout)[:1000]}"
-        )
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        raise CommandExecutionError(f"kubectl returned invalid JSON: {exc}") from exc
-    return payload if isinstance(payload, dict) else {}
-
-
 def collect_snapshot(
-    context: str,
+    context: str | None,
     *,
     namespace: str,
     all_namespaces: bool,
     timeout_seconds: int,
+    read_policy: KubernetesReadPolicy = DEFAULT_KUBERNETES_READ_POLICY,
+    safety_policy: SafetyPolicy | None = None,
+    production_acknowledged: bool = False,
 ) -> dict[str, Any]:
-    scope = ["-A"] if all_namespaces else ["-n", namespace]
-    pods = _kubectl_json(["get", "pods", *scope], context=context, timeout_seconds=timeout_seconds)
-    if executable_path("kubectl") is None:
-        raise DependencyUnavailableError("Required executable is unavailable: kubectl")
-    metrics_result = run_command(
-        [
-            "kubectl",
-            "--context",
-            context,
-            "get",
-            "--raw",
-            "/apis/metrics.k8s.io/v1beta1/pods",
-        ],
+    target = read_policy.authorize(
+        context,
+        namespace=namespace,
+        all_namespaces=all_namespaces,
         timeout_seconds=timeout_seconds,
-        max_output_chars=20_000_000,
+        safety_policy=safety_policy,
+        production_acknowledged=production_acknowledged,
+    )
+    response_namespace = None if all_namespaces else namespace
+    pods, pods_error = read_list(
+        [*target.args, "get", "--raw", resource_path("/api/v1", "pods", response_namespace)],
+        timeout_seconds,
+        namespace=response_namespace,
+        required=True,
+        allowed_kinds=("Pod",),
     )
     metrics: dict[str, Any] = {}
     metrics_error: str | None = None
-    if metrics_result.succeeded:
-        try:
-            decoded = json.loads(metrics_result.stdout)
-            metrics = decoded if isinstance(decoded, dict) else {}
-        except json.JSONDecodeError:
-            metrics_error = "Metrics API returned invalid JSON"
-    else:
-        metrics_error = (metrics_result.stderr or metrics_result.stdout)[:1000]
-    return {"pods": pods, "metrics": metrics, "metrics_error": metrics_error}
+    if pods_error is None:
+        metrics, metrics_error = read_list(
+            [
+                *target.args,
+                "get",
+                "--raw",
+                resource_path("/apis/metrics.k8s.io/v1beta1", "pods", response_namespace),
+            ],
+            timeout_seconds,
+            namespace=response_namespace,
+            allowed_kinds=("PodMetrics",),
+        )
+        if metrics_error is None and _items(pods) and not _items(metrics):
+            metrics_error = "Metrics API returned no samples for the collected Pods"
+    return {
+        "context": target.context,
+        "pods": pods,
+        "pods_error": pods_error,
+        "metrics": metrics,
+        "metrics_error": metrics_error,
+    }
 
 
 def _owner(pod: dict[str, Any]) -> tuple[str, str]:
@@ -405,6 +402,7 @@ def build_report(
     all_namespaces: bool = False,
     snapshot_path: Path | None = None,
     threshold: Severity = Severity.HIGH,
+    read_policy: KubernetesReadPolicy = DEFAULT_KUBERNETES_READ_POLICY,
     timeout_seconds: int = 30,
     safety_policy: SafetyPolicy | None = None,
     production_acknowledged: bool = False,
@@ -417,32 +415,35 @@ def build_report(
         snapshot = _read_snapshot(snapshot_path)
         resolved_context = str(snapshot.get("context", snapshot_path.resolve()))
     else:
-        resolved_context = resolve_context(context, timeout_seconds)
-        require_safe_target(
-            resolved_context,
-            safety_policy or SafetyPolicy(),
-            production_acknowledged=production_acknowledged,
-        )
         snapshot = collect_snapshot(
-            resolved_context,
+            context,
             namespace=namespace,
             all_namespaces=all_namespaces,
             timeout_seconds=timeout_seconds,
+            read_policy=read_policy,
+            safety_policy=safety_policy,
+            production_acknowledged=production_acknowledged,
         )
+        resolved_context = Redactor().redact(str(snapshot["context"]))
     findings, previews, counters = analyze_snapshot(
         snapshot,
         overrequest_ratio=overrequest_ratio,
         high_usage_ratio=high_usage_ratio,
     )
     metrics_error = snapshot.get("metrics_error")
-    partial = not isinstance(snapshot.get("metrics"), dict) or not snapshot.get("metrics")
+    pods_error = snapshot.get("pods_error") if snapshot_path is None else None
+    partial = (
+        bool(pods_error or metrics_error)
+        or not isinstance(snapshot.get("metrics"), dict)
+        or not snapshot.get("metrics")
+    )
     if metrics_error or partial:
         findings.append(
             _finding(
                 "KUBE-METRICS-UNAVAILABLE",
                 Severity.MEDIUM,
                 "Kubernetes Metrics API data is unavailable or incomplete",
-                f"error={str(metrics_error or 'no metrics returned')[:500]}",
+                f"error={str(pods_error or metrics_error or 'no metrics returned')[:500]}",
                 "Install or repair Metrics Server, or provide a longer-window Prometheus source before making rightsizing changes.",
                 namespace,
                 "metrics-api",
@@ -456,6 +457,13 @@ def build_report(
         "metrics": counters,
         "recommendation_warning": "Current Metrics API samples are insufficient for automatic resizing; validate with longer-window percentile data.",
     }
+    if snapshot_path is None:
+        extensions["scope"]["mode"] = "live"
+        extensions["collection_errors"] = {
+            key: value
+            for key, value in {"pods": pods_error, "metrics": metrics_error}.items()
+            if value
+        }
     if include_patch_preview:
         extensions["patch_preview"] = previews
     return Report(

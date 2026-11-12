@@ -11,7 +11,15 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from devops_toolkit.core.exceptions import ConfigurationError, DependencyUnavailableError
+from devops_toolkit.core.collection import CollectionState
+from devops_toolkit.core.kubernetes import (
+    DEFAULT_KUBERNETES_READ_POLICY,
+    KubernetesReadPolicy,
+    KubernetesTarget,
+    read_list,
+    resolve_target,
+    resource_path,
+)
 from devops_toolkit.core.models import (
     Confidence,
     Evidence,
@@ -23,9 +31,8 @@ from devops_toolkit.core.models import (
     utc_now,
 )
 from devops_toolkit.core.redaction import Redactor
-from devops_toolkit.core.safety import SafetyPolicy, require_safe_target
+from devops_toolkit.core.safety import SafetyPolicy
 from devops_toolkit.core.serialization import report_to_json
-from devops_toolkit.core.subprocess import executable_path, run_command
 from devops_toolkit.policies.engine import status_for_findings
 from devops_toolkit.version import __version__
 
@@ -371,81 +378,70 @@ def sanitize_kubernetes_payload(value: Any, *, parent_key: str = "") -> Any:
     return value
 
 
-def _kubectl_json(
-    args: list[str], *, context: str, timeout_seconds: int
-) -> tuple[dict[str, Any], str | None]:
-    result = run_command(
-        ["kubectl", "--context", context, *args, "-o", "json"],
-        timeout_seconds=timeout_seconds,
-        max_output_chars=10_000_000,
-        sanitize_output=False,
-    )
-    if result.timed_out:
-        return {}, "command timed out"
-    if result.returncode != 0:
-        return {}, Redactor().redact(result.stderr or result.stdout)[:500]
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return {}, "kubectl returned invalid JSON"
-    return payload if isinstance(payload, dict) else {}, None
-
-
 def resolve_context(context: str | None, timeout_seconds: int) -> str:
-    if executable_path("kubectl") is None:
-        raise DependencyUnavailableError("Required executable is unavailable: kubectl")
-    contexts_result = run_command(
-        ["kubectl", "config", "get-contexts", "-o", "name"], timeout_seconds=timeout_seconds
-    )
-    if not contexts_result.succeeded:
-        raise ConfigurationError("Unable to list Kubernetes contexts")
-    contexts = [line.strip() for line in contexts_result.stdout.splitlines() if line.strip()]
-    if context:
-        if context not in contexts:
-            raise ConfigurationError(f"Kubernetes context does not exist: {context}")
-        return context
-    if len(contexts) > 1:
-        raise ConfigurationError("Multiple Kubernetes contexts exist; provide --context explicitly")
-    if len(contexts) == 1:
-        return contexts[0]
-    current = run_command(["kubectl", "config", "current-context"], timeout_seconds=timeout_seconds)
-    if current.succeeded and current.stdout.strip():
-        return current.stdout.strip()
-    raise ConfigurationError("No Kubernetes context is configured")
+    return resolve_target(context, timeout_seconds).context
 
 
 def collect_cluster(
-    context: str,
+    context: str | None,
     *,
     namespace: str = "default",
     all_namespaces: bool = False,
     timeout_seconds: int = 30,
+    read_policy: KubernetesReadPolicy = DEFAULT_KUBERNETES_READ_POLICY,
+    safety_policy: SafetyPolicy | None = None,
+    production_acknowledged: bool = False,
+) -> tuple[dict[str, dict[str, Any]], dict[str, str], bool]:
+    target = read_policy.authorize(
+        context,
+        namespace=namespace,
+        all_namespaces=all_namespaces,
+        timeout_seconds=timeout_seconds,
+        safety_policy=safety_policy,
+        production_acknowledged=production_acknowledged,
+    )
+    return _collect_cluster(
+        target, namespace, all_namespaces, timeout_seconds, read_policy.allow_cluster_scope
+    )
+
+
+def _collect_cluster(
+    target: KubernetesTarget,
+    namespace: str,
+    all_namespaces: bool,
+    timeout_seconds: int,
+    allow_cluster_scope: bool,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, str], bool]:
     collections: dict[str, dict[str, Any]] = {}
     errors: dict[str, str] = {}
     resources = {
-        "nodes": ["get", "nodes"],
-        "pods": ["get", "pods"],
-        "deployments": ["get", "deployments"],
-        "statefulsets": ["get", "statefulsets"],
-        "daemonsets": ["get", "daemonsets"],
-        "jobs": ["get", "jobs"],
-        "pvcs": ["get", "persistentvolumeclaims"],
-        "events": ["get", "events"],
-        "endpoints": ["get", "endpoints"],
+        "nodes": ("/api/v1", "nodes", "Node"),
+        "pods": ("/api/v1", "pods", "Pod"),
+        "deployments": ("/apis/apps/v1", "deployments", "Deployment"),
+        "statefulsets": ("/apis/apps/v1", "statefulsets", "StatefulSet"),
+        "daemonsets": ("/apis/apps/v1", "daemonsets", "DaemonSet"),
+        "jobs": ("/apis/batch/v1", "jobs", "Job"),
+        "pvcs": ("/api/v1", "persistentvolumeclaims", "PersistentVolumeClaim"),
+        "events": ("/api/v1", "events", "Event"),
+        "endpoints": ("/api/v1", "endpoints", "Endpoints"),
     }
-    for name, args in resources.items():
-        scoped_args = list(args)
-        if name != "nodes":
-            scoped_args.extend(["-A"] if all_namespaces else ["-n", namespace])
-        payload, error = _kubectl_json(
-            scoped_args, context=context, timeout_seconds=timeout_seconds
+    for name, (api, resource, kind) in resources.items():
+        namespaced = name != "nodes"
+        if not namespaced and allow_cluster_scope is not True:
+            continue
+        response_namespace = namespace if namespaced and not all_namespaces else None
+        payload, error = read_list(
+            [*target.args, "get", "--raw", resource_path(api, resource, response_namespace)],
+            timeout_seconds,
+            namespace=response_namespace,
+            namespaced=namespaced,
+            allowed_kinds=(kind,),
         )
         if error:
             errors[name] = error
         else:
             collections[name] = payload
-    return collections, errors, bool(errors)
+    return collections, errors, bool(errors) or allow_cluster_scope is not True
 
 
 def analyze_collection(collections: dict[str, dict[str, Any]]) -> list[Finding]:
@@ -468,22 +464,23 @@ def build_report(
     namespace: str = "default",
     all_namespaces: bool = False,
     threshold: Severity = Severity.HIGH,
+    read_policy: KubernetesReadPolicy = DEFAULT_KUBERNETES_READ_POLICY,
     timeout_seconds: int = 30,
     safety_policy: SafetyPolicy | None = None,
     production_acknowledged: bool = False,
 ) -> tuple[Report, dict[str, dict[str, Any]]]:
     started = utc_now()
-    resolved_context = resolve_context(context, timeout_seconds)
-    require_safe_target(
-        resolved_context,
-        safety_policy or SafetyPolicy(),
-        production_acknowledged=production_acknowledged,
-    )
-    collections, errors, partial = collect_cluster(
-        resolved_context,
+    target = read_policy.authorize(
+        context,
         namespace=namespace,
         all_namespaces=all_namespaces,
         timeout_seconds=timeout_seconds,
+        safety_policy=safety_policy,
+        production_acknowledged=production_acknowledged,
+    )
+    collect_nodes = read_policy.allow_cluster_scope is True
+    collections, errors, partial = _collect_cluster(
+        target, namespace, all_namespaces, timeout_seconds, collect_nodes
     )
     findings = analyze_collection(collections)
     for resource_name, error in errors.items():
@@ -505,7 +502,7 @@ def build_report(
             tool_version=__version__,
             started_at=started,
             completed_at=completed,
-            target=resolved_context,
+            target=Redactor().redact(target.context),
             partial=partial,
             capabilities=[
                 "nodes",
@@ -519,7 +516,14 @@ def build_report(
         findings=findings,
         status=status_for_findings(findings, threshold, partial=partial),
         extensions={
-            "scope": {"namespace": namespace, "all_namespaces": all_namespaces},
+            "scope": {
+                "namespace": namespace,
+                "all_namespaces": all_namespaces,
+                "cluster_scoped": collect_nodes,
+            },
+            "collection_exclusions": (
+                {} if collect_nodes else {"nodes": CollectionState.INTENTIONALLY_EXCLUDED}
+            ),
             "collection_errors": errors,
             "resource_counts": {
                 name: len(_items(payload)) for name, payload in collections.items()

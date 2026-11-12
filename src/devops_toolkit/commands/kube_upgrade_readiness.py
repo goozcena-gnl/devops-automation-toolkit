@@ -7,10 +7,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-from devops_toolkit.core.exceptions import (
-    CommandExecutionError,
-    ConfigurationError,
-    DependencyUnavailableError,
+from devops_toolkit.core.exceptions import ConfigurationError
+from devops_toolkit.core.kubernetes import (
+    DEFAULT_KUBERNETES_READ_POLICY,
+    KubernetesReadPolicy,
+    read_api_versions,
+    read_json,
+    read_list,
 )
 from devops_toolkit.core.models import (
     Confidence,
@@ -22,8 +25,8 @@ from devops_toolkit.core.models import (
     Severity,
     utc_now,
 )
-from devops_toolkit.core.safety import SafetyPolicy, require_safe_target
-from devops_toolkit.core.subprocess import executable_path, run_command
+from devops_toolkit.core.redaction import Redactor
+from devops_toolkit.core.safety import SafetyPolicy
 from devops_toolkit.policies.engine import status_for_findings
 from devops_toolkit.version import __version__
 
@@ -488,73 +491,74 @@ def analyze_snapshot(
     return findings, metrics
 
 
-def _kubectl_args(context: str | None) -> list[str]:
-    return ["kubectl", *(["--context", context] if context else [])]
-
-
-def _json_command(args: list[str], timeout_seconds: int) -> tuple[dict[str, Any], str | None]:
-    result = run_command(args, timeout_seconds=timeout_seconds, max_output_chars=10_000_000)
-    if not result.succeeded:
-        return {}, (result.stderr or result.stdout or "command failed")[:500]
-    try:
-        payload = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return {}, "command returned invalid JSON"
-    return (payload if isinstance(payload, dict) else {}), None
-
-
-def collect_snapshot(context: str | None, timeout_seconds: int) -> dict[str, Any]:
-    if executable_path("kubectl") is None:
-        raise DependencyUnavailableError("Required executable is unavailable: kubectl")
-    base = _kubectl_args(context)
-    version, version_error = _json_command([*base, "version", "-o", "json"], timeout_seconds)
+def collect_snapshot(
+    context: str | None,
+    timeout_seconds: int,
+    *,
+    read_policy: KubernetesReadPolicy = DEFAULT_KUBERNETES_READ_POLICY,
+    safety_policy: SafetyPolicy | None = None,
+    production_acknowledged: bool = False,
+) -> dict[str, Any]:
+    target = read_policy.authorize(
+        context,
+        timeout_seconds=timeout_seconds,
+        safety_policy=safety_policy,
+        production_acknowledged=production_acknowledged,
+        namespace="kube-system",
+        all_namespaces=True,
+        require_cluster_scope=True,
+    )
+    base = target.args
+    version, version_error = read_json(
+        [*base, "version", "-o", "json"], timeout_seconds, required=True
+    )
+    if version_error is None:
+        for key in ("serverVersion", "clientVersion"):
+            record = version.get(key)
+            if not isinstance(record, dict) or not VERSION_RE.fullmatch(
+                str(record.get("gitVersion", "")).split("-")[0].split("+")[0]
+            ):
+                version_error = "kubectl returned invalid Kubernetes version evidence"
+                break
     if version_error:
-        raise CommandExecutionError(f"Unable to collect Kubernetes version: {version_error}")
-    notes: list[str] = []
+        return {
+            "context": target.context,
+            "version_error": version_error,
+            "collection_notes": [f"version: {version_error}"],
+        }
 
-    text_result = run_command(
-        [*base, "api-versions"], timeout_seconds=timeout_seconds, max_output_chars=2_000_000
-    )
-    api_versions = (
-        [line.strip() for line in text_result.stdout.splitlines() if line.strip()]
-        if text_result.succeeded
-        else []
-    )
-    if not text_result.succeeded:
-        notes.append(f"api-versions: {(text_result.stderr or text_result.stdout)[:300]}")
+    notes: list[str] = []
+    api_versions, error = read_api_versions(target, timeout_seconds)
+    if error:
+        notes.append(f"api-versions: {error}")
 
     collections: dict[str, dict[str, Any]] = {}
-    commands = {
-        "nodes": [*base, "get", "nodes", "-o", "json"],
-        "pdbs": [*base, "get", "poddisruptionbudgets.policy", "-A", "-o", "json"],
-        "crds": [*base, "get", "customresourcedefinitions.apiextensions.k8s.io", "-o", "json"],
-        "mutating_webhooks": [
-            *base,
-            "get",
-            "mutatingwebhookconfigurations.admissionregistration.k8s.io",
-            "-o",
-            "json",
-        ],
-        "validating_webhooks": [
-            *base,
-            "get",
-            "validatingwebhookconfigurations.admissionregistration.k8s.io",
-            "-o",
-            "json",
-        ],
-        "api_services": [*base, "get", "apiservices.apiregistration.k8s.io", "-o", "json"],
-        "addons_workloads": [
-            *base,
-            "get",
-            "deployments,statefulsets,daemonsets",
-            "-n",
-            "kube-system",
-            "-o",
-            "json",
-        ],
+    requests = {
+        "nodes": (["nodes"], ("Node",)),
+        "pdbs": (["poddisruptionbudgets.policy", "-A"], ("PodDisruptionBudget",)),
+        "crds": (["customresourcedefinitions.apiextensions.k8s.io"], ("CustomResourceDefinition",)),
+        "mutating_webhooks": (
+            ["mutatingwebhookconfigurations.admissionregistration.k8s.io"],
+            ("MutatingWebhookConfiguration",),
+        ),
+        "validating_webhooks": (
+            ["validatingwebhookconfigurations.admissionregistration.k8s.io"],
+            ("ValidatingWebhookConfiguration",),
+        ),
+        "api_services": (["apiservices.apiregistration.k8s.io"], ("APIService",)),
+        "addons_workloads": (
+            ["deployments,statefulsets,daemonsets", "-n", "kube-system"],
+            ("Deployment", "StatefulSet", "DaemonSet"),
+        ),
     }
-    for name, command in commands.items():
-        payload, error = _json_command(command, timeout_seconds)
+    for name, (resource_args, kinds) in requests.items():
+        payload, error = read_list(
+            [*base, "get", *resource_args, "-o", "json"],
+            timeout_seconds,
+            namespace="kube-system" if name == "addons_workloads" else None,
+            namespaced=name in {"pdbs", "addons_workloads"},
+            allowed_kinds=kinds,
+        )
         collections[name] = payload
         if error:
             notes.append(f"{name}: {error}")
@@ -580,6 +584,7 @@ def collect_snapshot(context: str | None, timeout_seconds: int) -> dict[str, Any
         )
 
     return {
+        "context": target.context,
         "version": {
             "server": version.get("serverVersion", {}),
             "client": version.get("clientVersion", {}),
@@ -606,31 +611,41 @@ def build_report(
     context: str | None = None,
     snapshot_path: Path | None = None,
     threshold: Severity = Severity.HIGH,
+    read_policy: KubernetesReadPolicy = DEFAULT_KUBERNETES_READ_POLICY,
     timeout_seconds: int = 60,
     safety_policy: SafetyPolicy | None = None,
     production_acknowledged: bool = False,
 ) -> Report:
     started = utc_now()
     _version(target_version)
-    if snapshot_path is None and safety_policy is not None:
-        require_safe_target(
-            context or "current-context",
-            safety_policy,
+    live = snapshot_path is None
+    payload = (
+        collect_snapshot(
+            context,
+            timeout_seconds,
+            read_policy=read_policy,
+            safety_policy=safety_policy,
             production_acknowledged=production_acknowledged,
         )
-    payload = (
-        _load_json(snapshot_path) if snapshot_path else collect_snapshot(context, timeout_seconds)
+        if snapshot_path is None
+        else _load_json(snapshot_path)
     )
-    findings, metrics = analyze_snapshot(payload, target_version=target_version)
+    resolved_context = Redactor().redact(str(payload["context"])) if live else context
     notes = payload.get("collection_notes", [])
-    partial = bool(notes) and snapshot_path is None
+    partial = bool(notes) and live
+    findings: list[Finding]
+    metrics: dict[str, int | str]
+    if live and payload.get("version_error"):
+        findings, metrics = [], {"target_version": _version_text(_version(target_version))}
+    else:
+        findings, metrics = analyze_snapshot(payload, target_version=target_version)
     return Report(
         metadata=ReportMetadata(
             tool=TOOL_NAME,
             tool_version=__version__,
             started_at=started,
             completed_at=utc_now(),
-            target=f"{context or 'offline-snapshot'}->{target_version}",
+            target=f"{resolved_context or 'offline-snapshot'}->{target_version}",
             partial=partial,
             capabilities=[
                 "read-only",
@@ -651,5 +666,17 @@ def build_report(
             "collection_notes": notes if isinstance(notes, list) else [],
             "known_removed_api_rules": len(REMOVED_APIS),
             "cluster_changes_executed": False,
+            **(
+                {
+                    "scope": {
+                        "all_namespaces": True,
+                        "cluster_scoped": True,
+                        "addon_namespace": "kube-system",
+                        "mode": "live",
+                    }
+                }
+                if live
+                else {}
+            ),
         },
     )

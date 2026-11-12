@@ -8,11 +8,11 @@ This catalog remains the complete 20-tool inventory.
 
 | Rank | ID | Entry point | Status | Primary dependencies |
 |---:|---|---|---|---|
-| 1 | secret-sentinel | `devops-toolkit secret-sentinel` | Implemented | Git optional, redaction, SARIF |
+| 1 | secret-sentinel | `devops-toolkit secret-sentinel` | Implemented | Working-tree and Git-history coverage, redaction, SARIF |
 | 2 | workstation-doctor | `scripts/workstation/devops-workstation-audit.ps1` | Implemented | PowerShell 7, Windows APIs |
-| 3 | iac-repo-gate | `devops-toolkit iac-repo-gate` | Implemented | Terraform/OpenTofu and validators optional |
+| 3 | iac-repo-gate | `devops-toolkit iac-repo-gate` | Implemented | Built-in checks, versioned Terraform/OpenTofu validation evidence and schema-stable reports |
 | 4 | gha-guard | `devops-toolkit gha-guard` | Implemented | YAML parser, SARIF |
-| 5 | kube-triage | `devops-toolkit kube-triage` | Implemented | kubectl, Kubernetes read access |
+| 5 | kube-triage | `devops-toolkit kube-triage` | Implemented | kubectl, namespace-scoped reads and opt-in Node inventory |
 | 6 | plan-risk | `devops-toolkit plan-risk` | Implemented | Terraform/OpenTofu plan JSON |
 | 7 | linux-triage | `scripts/linux/linux-triage.sh` | Implemented | Linux native commands |
 | 8 | repo-baseline | `devops-toolkit repo-baseline` | Implemented | GitHub API pagination |
@@ -22,12 +22,12 @@ This catalog remains the complete 20-tool inventory.
 | 12 | ci-evidence | `devops-toolkit ci-evidence` | Implemented | GitHub logs, structured redaction, sanitized bundles |
 | 13 | prom-audit | `devops-toolkit prom-audit` | Implemented | Prometheus API |
 | 14 | slo-budget | `devops-toolkit slo-budget` | Implemented | time-series calculations |
-| 15 | kube-rightsize | `devops-toolkit kube-rightsize` | Implemented | Metrics API and Prometheus |
+| 15 | kube-rightsize | `devops-toolkit kube-rightsize` | Implemented | namespaced Kubernetes Pod and PodMetrics lists |
 | 16 | cloud-iam-audit | `devops-toolkit cloud-iam-audit` | Implemented | Azure/AWS adapters |
 | 17 | cloud-waste | `devops-toolkit cloud-waste` | Implemented | normalized cloud resources |
 | 18 | budget-guard | `devops-toolkit budget-guard` | Implemented | billing time series |
 | 19 | iac-drift-guard | `devops-toolkit iac-drift-guard` | Implemented | plan-risk engine |
-| 20 | kube-upgrade-readiness | `devops-toolkit kube-upgrade-readiness` | Implemented | kubectl and compatibility rules |
+| 20 | kube-upgrade-readiness | `devops-toolkit kube-upgrade-readiness` | Implemented | opt-in cluster-wide kubectl reads or offline snapshots |
 
 ## Security, workstation, IaC, CI/CD, and Kubernetes triage
 

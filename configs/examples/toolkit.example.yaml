@@ -24,11 +24,14 @@ tools:
     run_optional_tools: true
   gha-guard: {}
   kube-triage:
+    allow_cluster_scope: false
     allowed_namespaces:
     - default
     - platform-system
     allowed_contexts:
     - development-cluster
+    allowed_servers:
+    - https://kubernetes.dev.example.invalid
   plan-risk:
     replacement_threshold: 10
   repo-baseline: {}
@@ -54,6 +57,8 @@ tools:
     - payments
     allowed_contexts:
     - development-cluster
+    allowed_servers:
+    - https://kubernetes.dev.example.invalid
   cloud-iam-audit: {}
   cloud-waste:
     snapshot_age_days: 30
@@ -75,5 +80,8 @@ tools:
     lock_timeout_seconds: 15
     stale_lock_minutes: 60
   kube-upgrade-readiness:
+    allow_cluster_scope: true
     allowed_contexts:
     - development-cluster
+    allowed_servers:
+    - https://kubernetes.dev.example.invalid
