@@ -19,6 +19,13 @@ def test_phase5_example_reports_match_schema(repository_root: Path) -> None:
     )
     validator = Draft202012Validator(report_schema, registry=registry)
     paths = sorted((repository_root / "examples/reports/phase5").glob("*.json"))
-    assert len(paths) == 5
+    assert {path.name for path in paths} == {
+        "ci-evidence.json",
+        "image-gate.json",
+        "kube-rightsize.json",
+        "kube-rightsize-read-scope.json",
+        "prom-audit.json",
+        "slo-budget.json",
+    }
     for path in paths:
         validator.validate(json.loads(path.read_text()))

@@ -1,0 +1,108 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "kube-rightsize",
+    "tool_version": "1.0.2",
+    "started_at": "2026-01-01T00:00:00Z",
+    "completed_at": "2026-01-01T00:00:00Z",
+    "target": "development-cluster",
+    "partial": true,
+    "capabilities": [
+      "requests-and-limits",
+      "metrics-api-current-usage",
+      "confidence-labelled-recommendations",
+      "read-only-patch-preview"
+    ]
+  },
+  "findings": [
+    {
+      "id": "KUBE-RESOURCES-MISSING-REQUEST",
+      "tool": "kube-rightsize",
+      "category": "kubernetes-resources",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Container lacks resource requests: payments/api/api",
+      "description": "Resource request, limit, and current-usage analysis identified a capacity or reliability concern.",
+      "recommendation": "Set evidence-based CPU and memory requests so scheduling and autoscaling have reliable inputs.",
+      "fingerprint": "sha256:1cf1b4ea128ce707d9b6b0afb2d5ab5a4c406f4ec298852260f71fcc42ffaee4",
+      "resource": {
+        "type": "Pod",
+        "name": "api",
+        "namespace": "payments"
+      },
+      "evidence": {
+        "summary": "missing=['cpu', 'memory']; pod=api"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "KUBE-RESOURCES-MISSING-LIMIT",
+      "tool": "kube-rightsize",
+      "category": "kubernetes-resources",
+      "severity": "low",
+      "confidence": "high",
+      "title": "Container lacks resource limits: payments/api/api",
+      "description": "Resource request, limit, and current-usage analysis identified a capacity or reliability concern.",
+      "recommendation": "Decide explicitly whether limits are required by workload behavior and namespace policy.",
+      "fingerprint": "sha256:469c6dc924421c5175a7310911b329baf34acb5f991d5d9805ef5ba22ab261c1",
+      "resource": {
+        "type": "Pod",
+        "name": "api",
+        "namespace": "payments"
+      },
+      "evidence": {
+        "summary": "missing=['cpu', 'memory']; pod=api"
+      },
+      "references": [],
+      "suppressed": false
+    },
+    {
+      "id": "KUBE-METRICS-UNAVAILABLE",
+      "tool": "kube-rightsize",
+      "category": "kubernetes-resources",
+      "severity": "medium",
+      "confidence": "high",
+      "title": "Kubernetes Metrics API data is unavailable or incomplete",
+      "description": "Resource request, limit, and current-usage analysis identified a capacity or reliability concern.",
+      "recommendation": "Install or repair Metrics Server, or provide a longer-window Prometheus source before making rightsizing changes.",
+      "fingerprint": "sha256:01ed536655d4da50f84ed8fe7b8a482d99d01fc908911cd537010bf7cb0c2f78",
+      "resource": {
+        "type": "APIService",
+        "name": "metrics-api",
+        "namespace": "payments"
+      },
+      "evidence": {
+        "summary": "error=kubectl response contains a resource outside the authorized scope"
+      },
+      "references": [],
+      "suppressed": false
+    }
+  ],
+  "status": "warning",
+  "summary": {
+    "info": 0,
+    "low": 1,
+    "medium": 2,
+    "high": 0,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 3
+  },
+  "extensions": {
+    "scope": {
+      "namespace": "payments",
+      "all_namespaces": false,
+      "mode": "live"
+    },
+    "metrics": {
+      "containers": 1,
+      "missing_requests": 1,
+      "missing_limits": 1
+    },
+    "recommendation_warning": "Current Metrics API samples are insufficient for automatic resizing; validate with longer-window percentile data.",
+    "collection_errors": {
+      "metrics": "kubectl response contains a resource outside the authorized scope"
+    }
+  }
+}

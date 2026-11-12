@@ -43,6 +43,23 @@ default and bounded by `--max-commits`.
 - Matched values are never included in findings.
 - Baselines suppress by fingerprint and preserve the suppression reason.
 
+## Collection coverage
+
+JSON reports expose `extensions.collection.working_tree` and
+`extensions.collection.git_history`. An empty scan can be `complete`.
+`intentionally_excluded` means all discovered content was outside the scan
+policy. Excluded directories, binary files, and symbolic links do not make a
+scan incomplete. Oversized and unreadable files have separate counters.
+
+`partial` means some requested evidence was collected and some was unavailable.
+`failed` means no usable evidence was collected for that part of the scan.
+Git enumeration failures do not fall back to an unfiltered filesystem scan.
+History is `not_requested` when disabled or limited to zero commits. Requesting
+history without Git metadata is a collection failure.
+
+Incomplete collection sets `metadata.partial` and returns exit code `5`
+unless a finding reaches the configured threshold, which still returns `1`.
+
 ## CI example
 
 ```bash

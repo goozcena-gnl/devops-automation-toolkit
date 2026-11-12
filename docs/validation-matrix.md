@@ -6,7 +6,7 @@ This matrix traces every ranked tool to an implementation, invocation, automated
 |---|---|---|---|---|---|---|
 | Secret Sentinel | `commands/secret_sentinel.py` | `devops-toolkit secret-sentinel` | unit, CLI, Git-history integration | `docs/tools/secret-sentinel.md` | `examples/reports/phase3/secret-sentinel.json` | Complete |
 | Workstation Doctor | `scripts/workstation/devops-workstation-audit.ps1` | PowerShell script | parser, hosted Windows smoke/schema, release contract | `docs/tools/workstation-doctor.md` | `examples/reports/phase3/workstation-doctor.json` | Complete |
-| IaC Repository Gate | `commands/iac_repo_gate.py` | `devops-toolkit iac-repo-gate` | unit, CLI, report contract | `docs/tools/iac-repo-gate.md` | `examples/reports/phase3/iac-repo-gate.json` | Complete |
+| IaC Repository Gate | `commands/iac_repo_gate.py` | `devops-toolkit iac-repo-gate` | unit, CLI, versioned JSON contract snapshots, fake-validator CLI integration | `docs/tools/iac-repo-gate.md` | `examples/reports/phase3/iac-repo-gate.json` plus `iac-repo-gate-complete.json` / `iac-repo-gate-incomplete.json` | Complete |
 | GitHub Actions Guard | `commands/gha_guard.py` | `devops-toolkit gha-guard` | unit, CLI, self-audit | `docs/tools/gha-guard.md` | `examples/reports/phase3/gha-guard.sarif` | Complete |
 | Kubernetes Triage | `commands/kube_triage.py` | `devops-toolkit kube-triage` | unit, CLI, fake-kubectl integration | `docs/tools/kube-triage.md` | `examples/reports/phase3/kube-triage.json` | Complete |
 | Terraform Plan Risk Analyzer | `commands/plan_risk.py` | `devops-toolkit plan-risk` | unit, CLI, report contract | `docs/tools/plan-risk.md` | `examples/reports/phase4/plan-risk.json` | Complete |
@@ -26,6 +26,18 @@ This matrix traces every ranked tool to an implementation, invocation, automated
 | Kubernetes Upgrade Readiness | `commands/kube_upgrade_readiness.py` | `devops-toolkit kube-upgrade-readiness` | unit, CLI, report contract | `docs/tools/kube-upgrade-readiness.md` | `examples/reports/phase6/kube-upgrade-readiness.json` | Complete |
 
 ## Evidence boundary
+
+Collection completeness tests exercise empty and excluded Secret Sentinel scans,
+size limits and Git enumeration failures, and structured Terraform/OpenTofu
+validation outcomes. The synthetic validator tests verify exit codes and
+redaction in all report formats. Terraform/OpenTofu validation JSON contract evidence additionally covers required
+format and counters, a compatible successful validation and missing-version
+incomplete evidence. Both outcomes are compared against checked-in synthetic
+report snapshots by contract tests; a fake POSIX executable exercises the full
+CLI/subprocess boundary without contacting providers or initializing backends.
+The original IaC example remains an intentionally uninitialized reference.
+The installed and module entry points are
+tested for the incomplete Secret Sentinel exit code.
 
 The Python analyzers, schema/report contracts, synthetic fixtures, fake CLI integrations, local Windows Python behavior, and native parser checks are deterministic release evidence. Hosted Ubuntu executes the Bash collector and ShellCheck; hosted Windows executes Workstation Doctor and PSScriptAnalyzer. Azure, AWS, private GitHub, production Kubernetes, Terraform/OpenTofu backends, enterprise Prometheus, private registries, and enterprise TLS remain target-environment validations.
 
@@ -61,3 +73,19 @@ Only the ten-discussion parameter that creates Windows-invalid filesystem names
 is POSIX-only; equivalent adversarial names remain covered by direct-input tests
 on all platforms. A Linux run does not validate Windows launcher execution or
 native Windows behavior.
+
+## A3 Kubernetes read scope
+
+A3 uses synthetic kubeconfig targets, Kubernetes lists, and a fake kubectl
+process on Windows and Linux. The fake records command arguments and rejects
+unexpected Kubernetes operations. The tests exercise both the CLI and Python
+collection entry points. See the [live read policy](kubernetes-read-scope.md).
+
+| Evidence | Scenarios | Automated checks and example |
+|---|---|---|
+| A — effective context | A3-T01–T05, T20–T22 | `test_kubernetes_read_scope.py` covers explicit and implicit selections, ambiguity, production aliases and direct calls. `test_kube_triage_fake_cli.py` checks that a denied CLI request reaches at most local config. |
+| B — namespace | A3-T06–T09, T14, T23 | Unit and CLI subprocess tests assert exact scope, DNS label validation, ordered config precedence and zero requests after a restrictive namespace decision. |
+| C — metrics | A3-T10–T11, T15 | Unit and fake kubectl tests assert paired Pods and PodMetrics routes and reject mismatched metrics. [Synthetic rightsizing report](../examples/reports/phase5/kube-rightsize-read-scope.json). |
+| D — cluster resources | A3-T12–T14, T16–T18 | Fake kubectl verifies conditional Nodes, required Upgrade opt-in, all-namespace PDBs, kube-system workloads, authorization, timeout, malformed and truncated responses. [Synthetic triage report](../examples/reports/phase3/kube-triage-read-scope.json), [synthetic upgrade report](../examples/reports/phase6/kube-upgrade-readiness-read-scope.json). |
+| E — offline | A3-T19 | Fake kubectl invocation log remains empty when analyzing a local snapshot. Offline analysis also has phase 5 and phase 6 report contracts. |
+| F — stable reports | A3-T15–T18, T24 | Schema 1.0 contracts, JSON snapshots, rejected payload exclusion in all four formats and bundles, and exit-code checks for success, findings, missing dependency, authorization, partial collection and policy refusal. |
