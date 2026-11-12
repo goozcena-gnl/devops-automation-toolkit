@@ -31,7 +31,7 @@ Adapters must not import command modules. Reporters must not perform collection.
 - `secret-sentinel` owns file and bounded Git-history scanning. It never returns raw secret matches.
 - `iac-repo-gate` owns repository inventory and validator orchestration. It never plans or applies infrastructure.
 - `gha-guard` owns local workflow parsing and static rules. It performs no GitHub mutation.
-- `kube-triage` owns explicit-context, read-only Kubernetes evidence and sanitized bundles. It never requests Secret objects.
+- `kube-triage` owns authorized, read-only Kubernetes evidence and sanitized bundles. It never requests Secret objects.
 - Workstation Doctor remains native PowerShell because Windows executable resolution, ACLs, WSL, and Docker Desktop integration are platform-specific.
 - `plan-risk` owns Terraform/OpenTofu plan JSON analysis and never runs apply.
 - `repo-baseline` owns read-only GitHub governance collection and offline snapshots.
@@ -48,6 +48,11 @@ Adapters must not import command modules. Reporters must not perform collection.
 Configuration is merged once at the CLI boundary. Common defaults control output format, severity threshold, timeout, and color. Tool-specific sections control bounded collection and policy behavior.
 
 The JSON schemas shipped under `src/devops_toolkit/resources/schemas/` are included in the wheel and are the runtime source of truth. Repository copies under `configs/schemas/` are contract-tested for byte-equivalent JSON content.
+
+Live Kubernetes collectors share a [read scope policy](kubernetes-read-scope.md)
+at the Python collection boundary. The CLI supplies the effective policy and
+collectors resolve kubeconfig locally, authorize the target and scope, then
+validate Kubernetes resource lists before analysis and reporting.
 
 ## Report model
 

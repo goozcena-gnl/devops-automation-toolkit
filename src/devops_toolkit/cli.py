@@ -60,6 +60,7 @@ from devops_toolkit.core.exceptions import (
 )
 from devops_toolkit.core.exit_codes import ExitCode
 from devops_toolkit.core.filesystem import atomic_write_text
+from devops_toolkit.core.kubernetes import KubernetesAuthorizationError, KubernetesReadPolicy
 from devops_toolkit.core.models import Severity
 from devops_toolkit.core.redaction import Redactor
 from devops_toolkit.core.safety import SafetyPolicy
@@ -334,21 +335,6 @@ def kube_triage_command(
 
     merged, tool_options = tool_config(config or [], "kube-triage")
     safety = SafetyPolicy(**merged["safety"])
-    allowed_namespaces = {
-        str(item) for item in tool_options.get("allowed_namespaces", []) if isinstance(item, str)
-    }
-    allowed_contexts = {
-        str(item) for item in tool_options.get("allowed_contexts", []) if isinstance(item, str)
-    }
-    if all_namespaces and allowed_namespaces:
-        typer.echo("--all-namespaces is blocked by the configured namespace allowlist", err=True)
-        raise typer.Exit(ExitCode.SAFETY_BLOCKED)
-    if allowed_namespaces and namespace not in allowed_namespaces:
-        typer.echo(f"Namespace is not in the configured allowlist: {namespace}", err=True)
-        raise typer.Exit(ExitCode.SAFETY_BLOCKED)
-    if context is not None and allowed_contexts and context not in allowed_contexts:
-        typer.echo(f"Kubernetes context is not in the configured allowlist: {context}", err=True)
-        raise typer.Exit(ExitCode.SAFETY_BLOCKED)
     try:
         report, collections = build_kube_triage_report(
             context=context,
@@ -358,6 +344,12 @@ def kube_triage_command(
             timeout_seconds=timeout_from_config(merged, timeout_seconds),
             safety_policy=safety,
             production_acknowledged=acknowledge_production,
+            read_policy=KubernetesReadPolicy(
+                allowed_contexts=tool_options.get("allowed_contexts"),
+                allowed_namespaces=tool_options.get("allowed_namespaces"),
+                allowed_servers=tool_options.get("allowed_servers"),
+                allow_cluster_scope=tool_options.get("allow_cluster_scope", False),
+            ),
         )
     except ConfigurationError as exc:
         typer.echo(str(exc), err=True)
@@ -854,26 +846,6 @@ def kube_rightsize_command(
 
     merged, tool_options = tool_config(config or [], "kube-rightsize")
     safety = SafetyPolicy(**merged["safety"])
-    allowed_namespaces = {
-        str(item) for item in tool_options.get("allowed_namespaces", []) if isinstance(item, str)
-    }
-    allowed_contexts = {
-        str(item) for item in tool_options.get("allowed_contexts", []) if isinstance(item, str)
-    }
-    if snapshot is None:
-        if all_namespaces and allowed_namespaces:
-            typer.echo(
-                "--all-namespaces is blocked by the configured namespace allowlist", err=True
-            )
-            raise typer.Exit(ExitCode.SAFETY_BLOCKED)
-        if allowed_namespaces and namespace not in allowed_namespaces:
-            typer.echo(f"Namespace is not in the configured allowlist: {namespace}", err=True)
-            raise typer.Exit(ExitCode.SAFETY_BLOCKED)
-        if context is not None and allowed_contexts and context not in allowed_contexts:
-            typer.echo(
-                f"Kubernetes context is not in the configured allowlist: {context}", err=True
-            )
-            raise typer.Exit(ExitCode.SAFETY_BLOCKED)
     overrequest_value = (
         overrequest_ratio
         if overrequest_ratio is not None
@@ -894,6 +866,11 @@ def kube_rightsize_command(
             timeout_seconds=timeout_from_config(merged, timeout_seconds),
             safety_policy=safety,
             production_acknowledged=acknowledge_production,
+            read_policy=KubernetesReadPolicy(
+                allowed_contexts=tool_options.get("allowed_contexts"),
+                allowed_namespaces=tool_options.get("allowed_namespaces"),
+                allowed_servers=tool_options.get("allowed_servers"),
+            ),
             include_patch_preview=patch_preview,
             overrequest_ratio=overrequest_value,
             high_usage_ratio=high_usage_value,
@@ -904,6 +881,9 @@ def kube_rightsize_command(
     except DependencyUnavailableError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(ExitCode.DEPENDENCY_UNAVAILABLE) from exc
+    except KubernetesAuthorizationError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(ExitCode.AUTHENTICATION_FAILURE) from exc
     except (SafetyBlockedError, CommandExecutionError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(
@@ -1237,17 +1217,6 @@ def kube_upgrade_readiness_command(
     """Assess Kubernetes version skew, API removals, drains, webhooks, and CRD readiness."""
 
     merged, tool_options = tool_config(config or [], "kube-upgrade-readiness")
-    allowed_contexts = {
-        str(item) for item in tool_options.get("allowed_contexts", []) if isinstance(item, str)
-    }
-    if (
-        snapshot is None
-        and context is not None
-        and allowed_contexts
-        and context not in allowed_contexts
-    ):
-        typer.echo(f"Kubernetes context is not in the configured allowlist: {context}", err=True)
-        raise typer.Exit(ExitCode.SAFETY_BLOCKED)
     try:
         report = build_kube_upgrade_report(
             target_version=target_version,
@@ -1257,6 +1226,12 @@ def kube_upgrade_readiness_command(
             timeout_seconds=timeout_from_config(merged, timeout_seconds),
             safety_policy=SafetyPolicy(**merged["safety"]),
             production_acknowledged=acknowledge_production,
+            read_policy=KubernetesReadPolicy(
+                allowed_contexts=tool_options.get("allowed_contexts"),
+                allowed_namespaces=tool_options.get("allowed_namespaces"),
+                allowed_servers=tool_options.get("allowed_servers"),
+                allow_cluster_scope=tool_options.get("allow_cluster_scope", False),
+            ),
         )
     except ConfigurationError as exc:
         typer.echo(str(exc), err=True)
@@ -1264,6 +1239,9 @@ def kube_upgrade_readiness_command(
     except DependencyUnavailableError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(ExitCode.DEPENDENCY_UNAVAILABLE) from exc
+    except KubernetesAuthorizationError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(ExitCode.AUTHENTICATION_FAILURE) from exc
     except SafetyBlockedError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(ExitCode.SAFETY_BLOCKED) from exc

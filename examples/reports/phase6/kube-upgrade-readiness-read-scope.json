@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "tool": "kube-upgrade-readiness",
+    "tool_version": "1.0.2",
+    "started_at": "2026-01-01T00:00:00Z",
+    "completed_at": "2026-01-01T00:00:00Z",
+    "target": "development-cluster->1.33.0",
+    "partial": true,
+    "capabilities": [
+      "read-only",
+      "live-kubectl-collection",
+      "version-skew",
+      "removed-api-review",
+      "node-health",
+      "pdb-review",
+      "webhook-review",
+      "crd-storage-review",
+      "addon-inventory"
+    ]
+  },
+  "findings": [],
+  "status": "warning",
+  "summary": {
+    "info": 0,
+    "low": 0,
+    "medium": 0,
+    "high": 0,
+    "critical": 0,
+    "suppressed": 0,
+    "total": 0
+  },
+  "extensions": {
+    "metrics": {
+      "current_server_version": "1.32.0",
+      "client_version": "1.32.0",
+      "target_version": "1.33.0",
+      "unhealthy_nodes": 0,
+      "node_skew_blockers": 0,
+      "removed_api_usages": 0,
+      "risky_pdbs": 0,
+      "webhook_review_items": 0,
+      "crd_storage_issues": 0,
+      "api_services_unavailable": 0,
+      "addons_inventoried": 0
+    },
+    "collection_notes": [
+      "Live discovery cannot prove which deprecated APIs external clients still call; inspect audit logs and manifests in addition to this report."
+    ],
+    "known_removed_api_rules": 21,
+    "cluster_changes_executed": false,
+    "scope": {
+      "all_namespaces": true,
+      "cluster_scoped": true,
+      "addon_namespace": "kube-system",
+      "mode": "live"
+    }
+  }
+}

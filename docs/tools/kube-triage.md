@@ -16,25 +16,17 @@ devops-toolkit kube-triage \
   --output kube-triage.json
 ```
 
-Use `--all-namespaces` only when the configured namespace policy permits it. A
-production-like context requires `--acknowledge-production` unless allowlisted.
-When more than one context exists, `--context` is mandatory.
+Use [the live Kubernetes policy](../kubernetes-read-scope.md) to restrict
+contexts, servers, and namespaces. When several contexts exist, select one with
+`--context`. `--all-namespaces` requires a policy without a namespace allowlist.
 
 ## Read-only collection
 
-The command invokes `kubectl --context ... get ... -o json` for:
-
-- nodes;
-- pods;
-- deployments;
-- StatefulSets;
-- DaemonSets;
-- jobs;
-- persistent-volume claims;
-- warning events;
-- endpoints.
-
-It does not request Kubernetes Secret objects.
+The namespace-scoped lists are Pods, Deployments, StatefulSets, DaemonSets,
+Jobs, PVCs, Events and Endpoints. Triage uses explicit Kubernetes API routes for
+these lists. It collects Nodes only when the effective `tools.kube-triage`
+configuration sets `allow_cluster_scope: true`. Node inventory requires this
+opt-in in both namespace modes.
 
 ## Analysis
 
@@ -51,9 +43,12 @@ a temporary file with restrictive permissions and atomically moved into place.
 
 ## Permissions
 
-Use a dedicated read-only role limited to the requested namespace and required
-cluster-scoped node access. Collection failures are reported individually and
-mark the result partial rather than being hidden.
+Use a read-only identity with list access to the requested resources in the
+requested namespace. Node list permission is needed only when Node collection is
+enabled. Reports record policy exclusions in `collection_exclusions` and
+collection failures in `collection_errors`. An excluded Nodes list leaves Node
+health unverified and the report partial. The bundle contains only validated
+resource lists.
 
 ## Limitations
 

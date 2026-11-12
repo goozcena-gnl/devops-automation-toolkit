@@ -65,7 +65,16 @@ def test_gha_guard_cli(repository_root) -> None:
     assert "GHA-PULL-REQUEST-TARGET" in result.stdout
 
 
-def test_kube_triage_blocks_namespace_outside_configured_allowlist(tmp_path) -> None:
+def test_kube_triage_blocks_namespace_outside_configured_allowlist(tmp_path, monkeypatch) -> None:
+    from devops_toolkit.core import kubernetes
+
+    monkeypatch.setattr(
+        kubernetes,
+        "resolve_target",
+        lambda *_args, **_kwargs: kubernetes.KubernetesTarget(
+            "development", "sandbox", "https://sandbox.example.invalid", ""
+        ),
+    )
     config = tmp_path / "toolkit.yaml"
     config.write_text(
         """version: 1
