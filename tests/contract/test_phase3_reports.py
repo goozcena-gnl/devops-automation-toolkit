@@ -9,6 +9,8 @@ from referencing import Registry, Resource
 
 from devops_toolkit.commands import gha_guard, iac_repo_gate, kube_triage, secret_sentinel
 from devops_toolkit.commands.common import exit_code_for_report
+from devops_toolkit.core import kubernetes
+from devops_toolkit.core.kubernetes import KubernetesReadPolicy
 from devops_toolkit.core.models import Severity
 from devops_toolkit.core.subprocess import CommandResult
 
@@ -34,12 +36,22 @@ def test_phase3_python_reports_match_report_contract(
     fixture_collection = json.loads(
         (repository_root / "tests/fixtures/kubernetes/collection.json").read_text(encoding="utf-8")
     )
-    monkeypatch.setattr(kube_triage, "resolve_context", lambda _context, _timeout: "development")
-    monkeypatch.setattr(
-        kube_triage,
-        "collect_cluster",
-        lambda *_args, **_kwargs: (fixture_collection, {}, False),
-    )
+
+    def fake_kubectl(args: list[str], **_kwargs: object) -> CommandResult:
+        if args[1:3] == ["config", "view"]:
+            payload = {
+                "current": "development",
+                "contexts": [["development", "sandbox"]],
+                "clusters": [["sandbox", "https://sandbox.example.invalid", ""]],
+            }
+        else:
+            resource = args[-1].rsplit("/", 1)[-1]
+            payload = fixture_collection[
+                "pvcs" if resource == "persistentvolumeclaims" else resource
+            ]
+        return CommandResult(tuple(args), 0, json.dumps(payload), "")
+
+    monkeypatch.setattr(kubernetes, "run_command", fake_kubectl)
 
     reports = [
         secret_sentinel.build_report(
@@ -53,7 +65,12 @@ def test_phase3_python_reports_match_report_contract(
         gha_guard.build_report(
             repository_root / "tests/fixtures/gha-repo", threshold=Severity.HIGH
         ),
-        kube_triage.build_report(context="development", threshold=Severity.HIGH)[0],
+        kube_triage.build_report(
+            context="development",
+            namespace="payments",
+            threshold=Severity.HIGH,
+            read_policy=KubernetesReadPolicy(allow_cluster_scope=True),
+        )[0],
     ]
 
     validator = _validator(repository_root)
