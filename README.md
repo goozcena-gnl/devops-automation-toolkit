@@ -164,8 +164,19 @@ devops-toolkit cloud-waste --provider aws --snapshot aws-inventory.json
 # Use explicitly scoped live read-only collection
 devops-toolkit kube-triage --context staging --namespace payments
 devops-toolkit prom-audit --url https://prometheus.example.com
-devops-toolkit kube-upgrade-readiness --target-version 1.33.0 --context staging
+# Live Upgrade Readiness requires an approved cluster-scope policy and read-only RBAC.
+# The following config file is an operator-reviewed local file, not shipped with the toolkit.
+devops-toolkit kube-upgrade-readiness --target-version 1.33.0 --context staging \
+  --config ./reviewed-kubernetes-policy.yaml
 ```
+
+Before running live Upgrade Readiness, create and review `reviewed-kubernetes-policy.yaml` with
+`tools.kube-upgrade-readiness.allow_cluster_scope: true`, restricted trusted context/server
+allowlists, and authorized cluster-wide read-only permissions. Without explicit opt-in, the
+command is intentionally denied (exit `7`); do not widen RBAC merely to suppress this guard.
+See the [v2 migration guide](docs/migration-v2.md) and
+[Kubernetes read-scope policy](docs/kubernetes-read-scope.md). Alternatively, use an approved
+offline `--snapshot` input when cluster-scope collection is not authorized.
 
 Run `devops-toolkit COMMAND --help` for each complete interface.
 
