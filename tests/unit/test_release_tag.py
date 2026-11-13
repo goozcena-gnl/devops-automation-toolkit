@@ -51,9 +51,19 @@ def test_mismatched_tags_fail_closed(package_version: str, bad_tag: str) -> None
 @pytest.mark.parametrize(
     "invalid_version",
     [
-        "", "2.0", "v2.0.0", "2.0.0-rc.1", "2.0.0rc", "2.0.0rc01",
-        "02.0.0", "2.00.0", "2.0.0a1", "2.0.0.dev1", "2.0.0.post1",
-        "2.0.0+local", "2.0.0\n",
+        "",
+        "2.0",
+        "v2.0.0",
+        "2.0.0-rc.1",
+        "2.0.0rc",
+        "2.0.0rc01",
+        "02.0.0",
+        "2.00.0",
+        "2.0.0a1",
+        "2.0.0.dev1",
+        "2.0.0.post1",
+        "2.0.0+local",
+        "2.0.0\n",
     ],
 )
 def test_unsupported_versions_fail_closed(invalid_version: str) -> None:
