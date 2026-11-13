@@ -24,16 +24,30 @@
 - README, changelog, compatibility matrix, the release process, and the [v2 migration guide](migration-v2.md).
 - Only tag/version-string validation in `.github/workflows/release.yml`; **no** change to Kubernetes read policies, runtime collectors, security allowlists or auto-release permissions.
 
-## Validation gates still required on the PR SHA
+## Exact-head validation completed before P2 (historical, not the upcoming commit)
 
-- CI matrix: Windows/Linux, Python 3.11–3.13; unit, contract, lint, mypy, native syntax, packaging.
-- Security: Gitleaks, Bandit, dependency audit and YAML static analysis.
-- Integration and documentation validations.
-- Plumber CI/CD security scan.
-- Read-only Release Preflight: wheel/sdist, clean installs, lock graph, deterministic ZIP, packaged schemas.
-- Inspect new `CI`, `Security`, `Integration`, `Release Preflight`, and `Plumber` checks before requesting human review.
-- Treat missing, skipped, or inconclusive evidence as unresolved, not PASS.
+- Validated HEAD: `602dc31d2d75a8d337388da86fb00e43c0b2cca3` (PR #77, Draft). Base/main: `f3033bb99645480cddb17d373bfe4fea4fee2952`.
+- The initial candidate `a32f057fd603fccfe0c48740a8d69a8dff272bbf` failed the Linux source ZIP executable-mode contract (1 failed, 1,422 passed). The second commit restored `scripts/linux/linux-triage.sh` mode `100755` without changing its contents. First-run failures remain documented and superseded.
+- All **17/17 checks** and **6/6 workflows** succeeded against the validated HEAD:
 
+| Workflow | Exact-head successful run |
+| --- | --- |
+| CI | [43434595878](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/runs/43434595878) |
+| Integration | [43434595800](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/runs/43434595800) |
+| Security | [43434595768](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/runs/43434595768) |
+| Documentation | [43434595867](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/runs/43434595867) |
+| Plumber | [43434595741](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/runs/43434595741) |
+| Release Preflight | [43434595707](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/runs/43434595707) |
+
+- CI: **1,423 unit/contract tests** per Windows/Linux Python 3.11–3.13 job; Integration: **169 tests**, 25 JSON reports and 2 SARIF. Security: no known vulnerabilities in the audited graph; Plumber score 100/100 (23 passing controls).
+- Preflight built and Twine-checked wheel/sdist `2.0.0rc1`; clean installs, `pip check`, four packaged JSON schemas and source ZIP reproducibility were checked. [Non-publishing artifact #14043395773](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/runs/43434595707/artifacts/14043395773) (629,924 bytes). [Evidence comment](https://github.com/goozcena-gnl/devops-automation-toolkit/pull/77#issuecomment-6854545067).
+
+## P2 follow-up: changes and fresh validation requirement
+
+- Added shared `tools/check_release_tag.py` to fail closed on a tag mismatched with a canonical Python stable/RC version. Example: Python `2.0.0rc1` must match the future tag `v2.0.0-rc.1`; a stable version maps to a stable tag.
+- `tests/unit/test_release_tag.py` adds positive, negative and workflow-wiring tests; `.github/workflows/release.yml` now calls the same checker without altering event triggers or permissions.
+- **Historical successful runs above do not validate this follow-up commit.** Its final HEAD and corresponding fresh CI, Integration, Security, Documentation, Plumber, Release Preflight runs must be recorded in a later PR conversation comment after completion. Avoid embedding the current commit's own SHA in a file included in that commit.
+- No cluster, runtime policy, JSON schema, release tag, merge or publication is changed or authorized by this document.
 ## Review and promotion boundaries
 
 The choice of major version must be approved by a human. Any live cluster validation is out of scope for this synthetic CI phase; the reviewed [migration guide](migration-v2.md) is mandatory operator context. The PR must remain in **Draft** until evidence is complete. No commit in this branch is authorization to merge, tag or publish.
