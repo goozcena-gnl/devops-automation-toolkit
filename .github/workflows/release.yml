@@ -34,7 +34,12 @@ jobs:
       - name: Verify tag and package version
         shell: bash
         run: |
-          test "${GITHUB_REF_NAME}" = "v$(devops-toolkit version)"
+          package_version="$(devops-toolkit version)"
+          expected_tag="v${package_version}"
+          if [[ "${package_version}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)rc([0-9]+)$ ]]; then
+            expected_tag="v${BASH_REMATCH[1]}-rc.${BASH_REMATCH[2]}"
+          fi
+          test "${GITHUB_REF_NAME}" = "${expected_tag}"
       - name: Validate repository
         run: make validate
       - name: Build release assets

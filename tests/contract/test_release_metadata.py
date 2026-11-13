@@ -91,3 +91,21 @@ def test_packaged_report_schema_validates_without_network_resolution(repository_
     )
 
     Draft202012Validator(report_schema).validate(example)
+
+
+def test_checked_in_report_versions_match_candidate(repository_root: Path) -> None:
+    """Synthetic JSON and SARIF evidence advertises this source version, not the old release."""
+    paths = sorted((repository_root / "examples/reports").rglob("*"))
+    observed = 0
+    for path in paths:
+        if not path.is_file() or path.suffix not in {".json", ".sarif"}:
+            continue
+        report = json.loads(path.read_text(encoding="utf-8"))
+        if path.suffix == ".sarif":
+            versions = [run["tool"]["driver"]["version"] for run in report["runs"]]
+        else:
+            versions = [report["metadata"]["tool_version"]]
+        assert versions, f"No report version in {path}"
+        assert all(version == __version__ for version in versions), path
+        observed += 1
+    assert observed >= 27

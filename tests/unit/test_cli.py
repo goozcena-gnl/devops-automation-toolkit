@@ -3,6 +3,7 @@ import json
 from typer.testing import CliRunner
 
 from devops_toolkit.cli import app
+from devops_toolkit.version import __version__
 
 runner = CliRunner()
 
@@ -10,7 +11,7 @@ runner = CliRunner()
 def test_version_command() -> None:
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "1.0.2" in result.stdout
+    assert __version__ in result.stdout
 
 
 def test_validate_config_command(repository_root) -> None:

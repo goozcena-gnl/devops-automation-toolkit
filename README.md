@@ -2,7 +2,7 @@
 
 > An installable Python CLI that converts cloud and platform evidence into deterministic, redacted JSON, Markdown, and SARIF reports across 20 read-only-first tools.
 
-The immutable `v1.0.0` tag and its unpublished draft are retained as release history. This source checkout targets version 1.0.2; for the latest **published** version and verified distribution assets, consult GitHub Releases. A source version alone does not imply publication. Deterministic local and hosted checks do not replace target-environment validation.
+The immutable `v1.0.0` tag and its unpublished draft are retained as release history. This source checkout is a **not-yet-published** v2.0.0-rc.1 candidate (Python package version `2.0.0rc1`); the latest published release remains v1.0.2; for the latest **published** version and verified distribution assets, consult GitHub Releases. A source version alone does not imply publication. Deterministic local and hosted checks do not replace target-environment validation.
 
 [![CI](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/ci.yml)
 [![Security](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/goozcena-gnl/devops-automation-toolkit/actions/workflows/security.yml)
@@ -31,6 +31,8 @@ The immutable `v1.0.0` tag and its unpublished draft are retained as release his
 The installed CLI routes each command to a narrow collector/analyzer module. Shared core libraries enforce configuration precedence, safety policy, redaction, bounded subprocess execution, findings, fingerprints, and exit codes. Reporters serialize the same model to console, JSON, Markdown, or SARIF. JSON Schemas are stored in the repository and packaged in the wheel for offline validation. The Bash and PowerShell collectors emit the same report contract without importing the Python package.
 
 See [`docs/architecture.md`](docs/architecture.md), [`docs/finding-model.md`](docs/finding-model.md), and the complete [`tool traceability matrix`](docs/validation-matrix.md).
+
+See the [v1.0.2 → v2.0.0 migration guide](docs/migration-v2.md) before enabling any live Kubernetes collection. The source candidate is not a published release.
 
 ## Installation
 
@@ -64,7 +66,7 @@ devops-toolkit version
 ### From a built wheel
 
 ```bash
-python -m pip install devops_automation_toolkit-1.0.2-py3-none-any.whl
+python -m pip install devops_automation_toolkit-2.0.0rc1-py3-none-any.whl
 devops-toolkit health
 ```
 
