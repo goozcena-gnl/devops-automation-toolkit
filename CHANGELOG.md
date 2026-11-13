@@ -4,6 +4,31 @@ All notable changes are documented here. The format follows Keep a Changelog and
 
 ## [Unreleased]
 
+## [2.0.0rc1] - 2026-11-13 (unpublished release candidate)
+
+This is a **draft candidate**, not a published release or tag. The major-version proposal reflects explicit, potentially incompatible changes to the public live Kubernetes collection behavior; final SemVer choice requires human review. Python packaging uses `2.0.0rc1` while the planned annotated tag, only after approval, is `v2.0.0-rc.1`.
+
+### Breaking changes / security
+
+- Kubernetes Triage no longer collects cluster-scoped Nodes by default. Set `tools.kube-triage.allow_cluster_scope: true` in a reviewed configuration when Node evidence is required; without it, the report records an intentional exclusion and partial evidence (#76).
+- Live Kubernetes Upgrade Readiness requires explicit `tools.kube-upgrade-readiness.allow_cluster_scope: true`, with authorized contexts, servers, and cross-namespace RBAC. Without approval, it exits with safety-blocked code `7`. Offline `--snapshot` remains supported (#76).
+- Kubernetes Triage and Rightsize authorize effective context, namespace, API endpoint and response scope before remote requests; Rightsize uses namespaced Pods and PodMetrics list endpoints (#76).
+
+### Fixed
+
+- Secret Sentinel reports incomplete working-tree/Git-history evidence explicitly and preserves exit `5` for partial or failed collection, unless a finding threshold triggers exit `1` (#74).
+- IaC Repository Gate no longer reports validation success on incomplete, malformed or inconsistent Terraform/OpenTofu `validate -json` responses; complete rejection stays a finding rather than an incomplete validation (#74, #75).
+
+### Changed
+
+- Updated Plumber to v0.7.23 (#73) and refreshed pinned development dependencies in #64, #65, #66, #67 and #68. The library runtime dependency ranges remain unchanged.
+- Added synthetic, fake-kubectl, contract and regression evidence for the new collection states and Kubernetes read policies. The existing report schema version remains `1.0`; consumers must still handle additional metadata, partial reports and safety-blocked exits.
+
+### Validation boundary
+
+- GitHub Actions CI, Security and Plumber passed on source base SHA `f3033bb99645480cddb17d373bfe4fea4fee2952`; the non-publishing Release Preflight run `43430767700` passed on that base. The candidate itself requires **new** checks and an exact-head preflight. No live cloud/Kubernetes-provider validation, new tag, GitHub Release, or publication is claimed. See [migration](docs/migration-v2.md).
+
+
 ## [1.0.2] - 2026-11-06
 
 Maintenance release consolidating the security, packaging, quality and dependency changes documented below. Source version 1.0.2 does not by itself imply that a GitHub Release or distribution has been published; publication is tracked separately by the approved tag, release assets and their checksums.

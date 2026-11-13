@@ -42,3 +42,7 @@ Before using a live collector in a production environment:
 4. set explicit account, subscription, context, namespace, repository, or region scope;
 5. confirm that generated reports and bundles meet local data-handling requirements;
 6. treat partial evidence as incomplete rather than clean.
+
+## Migrating from v1.0.2 to the v2.0.0-rc.1 candidate
+
+The candidate changes default live Kubernetes read scope: Triage excludes Nodes unless `allow_cluster_scope: true`, and live Upgrade Readiness rejects cluster-wide inspection without opt-in. These changes can alter reports and exit codes for existing automation. Consult [the versioned migration guide](migration-v2.md) before updating a live job. Snapshot analysis remains offline. No cloud or production-cluster validation is claimed.

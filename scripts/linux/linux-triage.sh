@@ -287,7 +287,7 @@ payload = {
     "schema_version": "1.0",
     "metadata": {
         "tool": "linux-triage",
-        "tool_version": "1.0.2",
+        "tool_version": "2.0.0rc1",
         "started_at": os.environ["STARTED_AT"],
         "completed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "target": "local-linux-host",

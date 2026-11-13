@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from devops_toolkit.version import __version__
+
 
 @pytest.mark.integration
 @pytest.mark.skipif(os.name == "nt", reason="Linux collector requires a POSIX host")
@@ -29,4 +31,4 @@ def test_linux_foundation_collector(repository_root: Path, tmp_path: Path) -> No
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["metadata"]["tool"] == "linux-triage"
     assert "host" in payload["extensions"]
-    assert payload["metadata"]["tool_version"] == "1.0.2"
+    assert payload["metadata"]["tool_version"] == __version__

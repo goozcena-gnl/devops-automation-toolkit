@@ -5,6 +5,8 @@ import zipfile
 from pathlib import Path
 from types import ModuleType
 
+from devops_toolkit.version import __version__
+
 
 def test_source_archive_uses_canonical_git_modes(
     repository_root: Path, tmp_path: Path, monkeypatch
@@ -14,8 +16,8 @@ def test_source_archive_uses_canonical_git_modes(
 
     assert build_release.main() == 0
 
-    archive = tmp_path / "devops-automation-toolkit-1.0.2.zip"
-    prefix = "devops-automation-toolkit-1.0.2"
+    archive = tmp_path / f"devops-automation-toolkit-{__version__}.zip"
+    prefix = f"devops-automation-toolkit-{__version__}"
     with zipfile.ZipFile(archive) as bundle:
         assert _permissions(bundle, f"{prefix}/README.md") == 0o644
         assert _permissions(bundle, f"{prefix}/scripts/linux/linux-triage.sh") == 0o755

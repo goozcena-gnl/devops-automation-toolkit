@@ -34,7 +34,9 @@ jobs:
       - name: Verify tag and package version
         shell: bash
         run: |
-          test "${GITHUB_REF_NAME}" = "v$(devops-toolkit version)"
+          python tools/check_release_tag.py \
+            --version "$(devops-toolkit version)" \
+            --tag "$GITHUB_REF_NAME"
       - name: Validate repository
         run: make validate
       - name: Build release assets

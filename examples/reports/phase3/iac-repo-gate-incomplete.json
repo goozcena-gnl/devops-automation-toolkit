@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "metadata": {
     "tool": "iac-repo-gate",
-    "tool_version": "1.0.2",
+    "tool_version": "2.0.0rc1",
     "started_at": "2026-11-11T00:00:00Z",
     "completed_at": "2026-11-11T00:00:00Z",
     "target": "synthetic/iac-validate",
