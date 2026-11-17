@@ -80,4 +80,4 @@ typing-extensions==4.16.0
 typing-inspection==0.4.4
 urllib3==2.8.0
 uv==0.13.7
-zipp==4.1.0 ; python_full_version < '3.12' and platform_machine != 'ppc64le' and platform_machine != 's390x'
+zipp==4.1.2 ; python_full_version < '3.12' and platform_machine != 'ppc64le' and platform_machine != 's390x'
